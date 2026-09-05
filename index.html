@@ -15,7 +15,102 @@
   </script>
 </head>
 <body>
-  <div id="app">Loading&hellip;</div>
+  <header class="topbar">
+    <div class="topbar-brand">Courtier Console</div>
+    <div class="topbar-actions">
+      <span class="icon-btn" title="Notifications">&#128276;</span>
+      <span class="user-menu">Loïc Dupont &#9662;</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <nav class="sidebar">
+      <ul>
+        <li>Plans tarifaires</li>
+        <li>Prime commerciale</li>
+        <li>Dispositifs d&rsquo;incitation</li>
+        <li>Fiches</li>
+        <li>Photos</li>
+        <li>Chiffrage détaillé</li>
+        <li>Formulaires</li>
+        <li>Suivi</li>
+        <li class="active">Diagnostic étude</li>
+        <li>Contrôles</li>
+        <li>Attestation</li>
+      </ul>
+    </nav>
+
+    <main class="main-column">
+      <h1>Données</h1>
+
+      <section class="form-section">
+        <h2>Cadre</h2>
+        <div class="field-grid">
+          <label>A (m) <input type="number" id="input-A" min="0" max="2" step="0.01"></label>
+          <label>B (m) <input type="number" id="input-B" min="0" max="2" step="0.01"></label>
+          <label>H1 (m) <input type="number" id="input-H1" min="0" max="2" step="0.01"></label>
+          <label>H2 (m) <input type="number" id="input-H2" min="0" max="2" step="0.01"></label>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <h2>Poteau</h2>
+        <div class="field-grid">
+          <label>Hv (m) <input type="number" id="input-Hv" min="0" max="2" step="0.01"></label>
+          <label>Ec (m) <input type="number" id="input-Ec" min="0" max="1" step="0.01"></label>
+          <label>Fee (m) <input type="number" id="input-Fee" min="0" max="1" step="0.01"></label>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <h2>Plaque d&rsquo;appui</h2>
+        <div class="field-grid">
+          <label>Ep (m) <input type="number" id="input-Ep" min="0" max="0.5" step="0.005"></label>
+          <label>&Phi;m (m) <input type="number" id="input-PhiM" min="0" max="0.5" step="0.005"></label>
+          <label>Uh (m) <input type="number" id="input-Uh" min="0" max="0.5" step="0.005"></label>
+          <label>Ub (m) <input type="number" id="input-Ub" min="0" max="0.5" step="0.005"></label>
+          <label>HsD (m) <input type="number" id="input-HsD" min="0" max="1" step="0.01"></label>
+        </div>
+      </section>
+    </main>
+
+    <aside class="right-rail">
+      <div class="validation-chips">
+        <span class="chip chip-ok">Cadre &#10003;</span>
+        <span class="chip chip-ok">Poteau &#10003;</span>
+      </div>
+
+      <div class="diagram-panel">
+        <div class="diagram-toggle">
+          <button id="view-toggle-2d" class="toggle-btn active">2D</button>
+          <button id="view-toggle-3d" class="toggle-btn">3D</button>
+        </div>
+        <div id="diagram-thumbnail" class="diagram-container"></div>
+        <button id="expand-diagram-btn" class="expand-btn">Agrandir le diagramme</button>
+      </div>
+
+      <div class="warning-callout">
+        Vérifiez les paramètres avant validation finale.
+      </div>
+
+      <div id="result-rows" class="result-rows"></div>
+    </aside>
+  </div>
+
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Agrandir le diagramme</h2>
+        <button id="modal-close-btn" class="close-btn">&times;</button>
+      </div>
+      <div class="diagram-toggle">
+        <button id="modal-view-toggle-2d" class="toggle-btn active">2D</button>
+        <button id="modal-view-toggle-3d" class="toggle-btn">3D</button>
+      </div>
+      <div id="modal-diagram-container" class="diagram-container modal-diagram-container"></div>
+    </div>
+  </div>
+
   <script type="module" src="js/app.js"></script>
 </body>
 </html>
