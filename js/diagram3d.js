@@ -54,6 +54,22 @@ export function mountDiagram3D(container) {
   // (see camera-fit-report.md) rather than tuned by eye alone.
   const FIT_PADDING = 1.3;
 
+  // Below this container width the CSS2D labels are hidden. They are DOM
+  // elements at a fixed 11px, so their size does NOT shrink with the
+  // panel: in the 288px-wide thumbnail, 11 labels over a ~100px-tall model
+  // overlap into unreadable mush and bury the geometry they annotate.
+  // The thumbnail is a preview; "Agrandir le diagramme" is how you read
+  // values. Hiding them below the threshold keeps the small view a clean
+  // silhouette and keeps the enlarged view fully annotated.
+  const LABEL_MIN_CONTAINER_WIDTH = 420;
+
+  // With labels hidden there is nothing outside the geometry's bounding
+  // box to leave room for, so the fit can tighten and let the model
+  // actually fill the small panel instead of floating in it.
+  const FIT_PADDING_NO_LABELS = 1.05;
+
+  let labelsVisible = true;
+
   // Computes the camera distance (from the box's bounding-sphere center)
   // needed to fit the ENTIRE sphere within the frustum, accounting for
   // both the vertical fov and the aspect-derived horizontal fov. Using the
@@ -69,7 +85,8 @@ export function mountDiagram3D(container) {
     const vHalf = THREE.MathUtils.degToRad(camera.fov) / 2;
     const hHalf = Math.atan(Math.tan(vHalf) * camera.aspect);
     const limitingHalf = Math.min(vHalf, hHalf);
-    const distance = (sphere.radius / Math.sin(limitingHalf)) * FIT_PADDING;
+    const padding = labelsVisible ? FIT_PADDING : FIT_PADDING_NO_LABELS;
+    const distance = (sphere.radius / Math.sin(limitingHalf)) * padding;
     return { distance, center: sphere.center };
   }
 
@@ -125,6 +142,14 @@ export function mountDiagram3D(container) {
     labelRenderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    // Toggle label legibility for the CURRENT panel size. This uses
+    // `visibility`, not `display`, on purpose: app.js owns the overlay's
+    // `display` for the 2D/3D view toggle, and two writers on one property
+    // would fight (switching to 3D would un-hide labels the thumbnail
+    // wants hidden). `visibility` is an independent axis, so both
+    // conditions must be permissive for a label to show.
+    labelsVisible = w >= LABEL_MIN_CONTAINER_WIDTH;
+    overlay.style.visibility = labelsVisible ? 'visible' : 'hidden';
     // Aspect ratio just changed (thumbnail <-> modal, or a window resize);
     // re-fit against the last-known geometry box so labels stay framed at
     // the new size. No-op (via computeFit's empty-box guard) before the
