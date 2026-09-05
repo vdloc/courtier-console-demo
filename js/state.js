@@ -12,6 +12,10 @@ const params = {
 
 const subscribers = new Set();
 
+// Returns the live params object BY REFERENCE, not a copy. Treat it as
+// read-only: mutating it would change state without notifying subscribers,
+// so the diagrams and the result rows would silently drift out of sync
+// with each other. Always go through setParam(), which notifies.
 export function getParams() {
   return params;
 }

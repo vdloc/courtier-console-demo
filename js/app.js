@@ -26,12 +26,21 @@ function applyViewModeVisibility() {
 
 function setViewMode(mode) {
   viewMode = mode;
-  document.getElementById('view-toggle-2d').classList.toggle('active', mode === '2d');
-  document.getElementById('view-toggle-3d').classList.toggle('active', mode === '3d');
-  const modalToggle2d = document.getElementById('modal-view-toggle-2d');
-  const modalToggle3d = document.getElementById('modal-view-toggle-3d');
-  if (modalToggle2d) modalToggle2d.classList.toggle('active', mode === '2d');
-  if (modalToggle3d) modalToggle3d.classList.toggle('active', mode === '3d');
+  // Both toggle pairs (thumbnail and modal) derive from this one call, so
+  // they can never disagree. `aria-pressed` is set alongside the `active`
+  // class rather than in the markup: these are toggle buttons, and a
+  // screen reader otherwise gets no signal about which view is selected.
+  for (const [id, active] of [
+    ['view-toggle-2d', mode === '2d'],
+    ['view-toggle-3d', mode === '3d'],
+    ['modal-view-toggle-2d', mode === '2d'],
+    ['modal-view-toggle-3d', mode === '3d']
+  ]) {
+    const btn = document.getElementById(id);
+    if (!btn) continue;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-pressed', String(active));
+  }
   applyViewModeVisibility();
 }
 

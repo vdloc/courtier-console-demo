@@ -40,34 +40,13 @@ body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); col
 
 .layout {
   display: grid;
-  grid-template-columns: 220px 1fr 320px;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  max-width: 1200px;
+  margin: 0 auto;
   gap: 1rem;
   padding: 1rem;
   align-items: start;
 }
-
-.sidebar ul { list-style: none; padding: 0; margin: 0; }
-.sidebar li {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 4px;
-  cursor: default;
-  color: #55606f;
-  font-size: 0.9rem;
-}
-.sidebar li.active { background: var(--navy); color: white; }
-.nav-icon {
-  flex: 0 0 1.1rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  color: #9aa5b3;
-}
-.sidebar li.active .nav-icon { color: rgba(255, 255, 255, 0.85); }
-.nav-label { flex: 1; }
 
 .main-column { background: var(--panel-bg); border-radius: 6px; padding: 1.5rem; }
 .form-section { margin-bottom: 1.5rem; }

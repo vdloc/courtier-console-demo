@@ -41,3 +41,13 @@ overlayEl.addEventListener('click', (e) => {
 });
 modalToggle2d.addEventListener('click', () => getApp().setViewMode('2d'));
 modalToggle3d.addEventListener('click', () => getApp().setViewMode('3d'));
+
+// The overlay declares role="dialog" aria-modal="true", which promises
+// dialog semantics; Escape-to-close is the part users actually reach for.
+// Asserting the ARIA attribute without honouring it is worse than not
+// asserting it at all.
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !overlayEl.classList.contains('hidden')) {
+    closeModal();
+  }
+});

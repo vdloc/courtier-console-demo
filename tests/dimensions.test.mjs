@@ -79,6 +79,21 @@ test('B: full depth along Z at the base', () => {
   assert.equal(rec.offsetDir.z, 0);
 });
 
+test('H1: first height segment, from the base up', () => {
+  const rec = getRecord('H1');
+  assertPoint(rec.from(sampleParams), { x: 0, y: 0, z: 0 }, 'H1.from');
+  assertPoint(rec.to(sampleParams), { x: 0, y: 0.4, z: 0 }, 'H1.to');
+  // Tracks the live param rather than the default.
+  assertPoint(
+    getRecord('H1').to({ ...sampleParams, H1: 0.9 }),
+    { x: 0, y: 0.9, z: 0 },
+    'H1.to at H1=0.9'
+  );
+  assert.equal(rec.offsetDir.x, -1); // drawn to the left of the block
+  assert.equal(rec.offsetDir.y, 0);
+  assert.equal(rec.offsetDir.z, 0);
+});
+
 test('H2: stacks on top of H1', () => {
   const rec = getRecord('H2');
   assertPoint(rec.from(sampleParams), { x: 0, y: 0.4, z: 0 }, 'H2.from'); // H1
