@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { dimensionRecords, visualScale } from './dimensions.js';
+import { dimensionRecords, visualScale, elevationShapes, LABEL_MIN_CONTAINER_WIDTH } from './dimensions.js';
 
 export function mountDiagram3D(container) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -61,7 +61,6 @@ export function mountDiagram3D(container) {
   // The thumbnail is a preview; "Agrandir le diagramme" is how you read
   // values. Hiding them below the threshold keeps the small view a clean
   // silhouette and keeps the enlarged view fully annotated.
-  const LABEL_MIN_CONTAINER_WIDTH = 420;
 
   // With labels hidden there is nothing outside the geometry's bounding
   // box to leave room for, so the fit can tighten and let the model
@@ -186,35 +185,63 @@ export function mountDiagram3D(container) {
     scene.remove(dynamicGroup);
     dynamicGroup = new THREE.Group();
 
-    const blockHeight = params.H1 + params.H2;
-    const blockGeo = new THREE.BoxGeometry(params.A, blockHeight, params.B);
-    const blockMat = new THREE.MeshStandardMaterial({ color: 0xcfd8e3, transparent: true, opacity: 0.5 });
-    const blockMesh = new THREE.Mesh(blockGeo, blockMat);
-    blockMesh.position.set(params.A / 2, blockHeight / 2, params.B / 2);
-    dynamicGroup.add(blockMesh);
-
-    const pipeStart = { x: 0, y: params.H1 + params.H2 + params.Hv, z: 0 };
-    const pipeEnd = { x: params.A, y: params.H1 + params.H2 + params.Hv, z: 0 };
-    const pipeRadius = visualScale('PhiM', params.PhiM) / 2;
-    const pipeLen = Math.hypot(pipeEnd.x - pipeStart.x, pipeEnd.z - pipeStart.z) || params.A;
-    const pipeGeo = new THREE.CylinderGeometry(pipeRadius, pipeRadius, pipeLen, 16);
-    const pipeMat = new THREE.MeshStandardMaterial({ color: 0xe07a2c });
-    const pipeMesh = new THREE.Mesh(pipeGeo, pipeMat);
-    pipeMesh.rotation.z = Math.PI / 2;
-    pipeMesh.position.set(params.A / 2, pipeStart.y, 0);
-    dynamicGroup.add(pipeMesh);
+    // Geometry comes from the SHARED elevation table, the same one the 2D
+    // renderer draws, so the two views cannot depict different objects.
+    // Each rect is extruded along Z by its own depth.
+    for (const shape of elevationShapes(params)) {
+      if (!(shape.w > 0) || !(shape.h > 0) || !(shape.depth > 0)) continue;
+      if (shape.kind === 'pipe') {
+        const radius = shape.h / 2;
+        const pipeGeo = new THREE.CylinderGeometry(radius, radius, shape.w, 16);
+        const pipeMat = new THREE.MeshStandardMaterial({ color: 0xe07a2c });
+        const pipeMesh = new THREE.Mesh(pipeGeo, pipeMat);
+        pipeMesh.rotation.z = Math.PI / 2;
+        pipeMesh.position.set(shape.x + shape.w / 2, shape.y + shape.h / 2, 0);
+        dynamicGroup.add(pipeMesh);
+        continue;
+      }
+      const geo = new THREE.BoxGeometry(shape.w, shape.h, shape.depth);
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xcfd8e3,
+        transparent: true,
+        opacity: 0.5
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(shape.x + shape.w / 2, shape.y + shape.h / 2, shape.depth / 2);
+      dynamicGroup.add(mesh);
+    }
 
     for (const rec of dimensionRecords) {
       const from = rec.from(params);
       const to = rec.to(params);
-      const lineGeo = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(from.x, from.y, from.z),
-        new THREE.Vector3(to.x, to.y, to.z)
-      ]);
+      // Spec 6.2: the witness line is offset by offsetDir so it sits
+      // BESIDE the object. Without this every vertical record collapses
+      // onto the same axis and the dashed line runs through the model.
+      const OFF = 0.09;
+      const off = new THREE.Vector3(
+        rec.offsetDir.x * OFF,
+        rec.offsetDir.y * OFF,
+        rec.offsetDir.z * OFF
+      );
+      const a = new THREE.Vector3(from.x, from.y, from.z).add(off);
+      const b = new THREE.Vector3(to.x, to.y, to.z).add(off);
+      const lineGeo = new THREE.BufferGeometry().setFromPoints([a, b]);
       const lineMat = new THREE.LineDashedMaterial({ color: 0x1a2b4c, dashSize: 0.02, gapSize: 0.01 });
       const line = new THREE.Line(lineGeo, lineMat);
       line.computeLineDistances();
       dynamicGroup.add(line);
+
+      // Extension lines from each measured point out to the dimension
+      // line, so the annotation reads as a drawing rather than a
+      // free-floating dash.
+      const extMat = new THREE.LineBasicMaterial({ color: 0x9aa5b3 });
+      for (const [p, q] of [[from, a], [to, b]]) {
+        const extGeo = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(p.x, p.y, p.z),
+          q.clone().add(off.clone().multiplyScalar(0.25))
+        ]);
+        dynamicGroup.add(new THREE.Line(extGeo, extMat));
+      }
 
       const labelDiv = document.createElement('div');
       labelDiv.textContent = rec.label(params);
@@ -226,9 +253,9 @@ export function mountDiagram3D(container) {
       labelDiv.style.whiteSpace = 'nowrap';
       const labelObj = new CSS2DObject(labelDiv);
       labelObj.position.set(
-        (from.x + to.x) / 2 + rec.offsetDir.x * 0.05,
-        (from.y + to.y) / 2 + rec.offsetDir.y * 0.05,
-        (from.z + to.z) / 2 + rec.offsetDir.z * 0.05
+        (a.x + b.x) / 2 + rec.offsetDir.x * 0.04,
+        (a.y + b.y) / 2 + rec.offsetDir.y * 0.04,
+        (a.z + b.z) / 2 + rec.offsetDir.z * 0.04
       );
       dynamicGroup.add(labelObj);
     }
@@ -249,8 +276,18 @@ export function mountDiagram3D(container) {
     buildScene(params);
   }
 
+  // 2D is the default view, so without this guard the 3D renderer would
+  // keep issuing draw calls (measured: ~120/sec) from page load onward
+  // for a viewer who never opens the 3D view at all. The rAF loop keeps
+  // ticking so OrbitControls damping resumes cleanly, but it does no GPU
+  // work while the canvas is hidden.
+  function isVisible() {
+    return canvas.style.display !== 'none' && canvas.isConnected;
+  }
+
   function animate() {
     requestAnimationFrame(animate);
+    if (!isVisible()) return;
     controls.update();
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);

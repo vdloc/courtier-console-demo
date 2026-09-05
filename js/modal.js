@@ -22,6 +22,9 @@ function moveDiagramInto(targetContainer) {
   targetContainer.appendChild(app.view3d.canvas);
   targetContainer.appendChild(app.view3d.overlay);
   app.view3d.resize();
+  // The 2D view's label visibility and text scale are both derived from
+  // the container size, so it has to redraw for the new container too.
+  if (app.view2d.resize) app.view2d.resize();
 }
 
 function openModal() {

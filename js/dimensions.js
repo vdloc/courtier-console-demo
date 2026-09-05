@@ -89,3 +89,40 @@ export const dimensionRecords = [
     label: (p) => `Ub = ${p.Ub.toFixed(2)}`
   }
 ];
+
+// The elevation object itself, as plain rectangles in the X/Y plane
+// (X = width, Y = height), listed bottom to top. Both renderers build
+// their geometry from THIS, for the same reason they both consume
+// dimensionRecords: it is the only way the 2D and 3D views can be shown
+// to depict the same object rather than two drifting interpretations.
+// The 3D renderer extrudes each rect along Z by the depth given here.
+//
+// The stack mirrors the dimension records exactly: the block spans
+// H1+H2, the post (poteau) rises through Hv, the bearing plate (plaque
+// d'appui) is Ec thick, and the stub adds Fee. The pipe sits at the
+// block top (y = H1+H2), which is where the PhiM record anchors it.
+//
+// Thin members go through visualScale so they stay visible; labels are
+// built from dimensionRecords and always report the TRUE value (§6.3).
+export function elevationShapes(p) {
+  const blockTop = p.H1 + p.H2;
+  const postW = visualScale('Ep', p.Ep);
+  const postX = (p.A - postW) / 2;
+  const capY = blockTop + p.Hv;
+  const pipeH = visualScale('PhiM', p.PhiM);
+  return [
+    { id: 'block', x: 0, y: 0, w: p.A, h: blockTop, depth: p.B, kind: 'solid' },
+    { id: 'pipe', x: 0, y: blockTop - pipeH / 2, w: p.A, h: pipeH, depth: pipeH, kind: 'pipe' },
+    { id: 'post', x: postX, y: blockTop, w: postW, h: p.Hv, depth: postW, kind: 'solid' },
+    { id: 'cap', x: 0, y: capY, w: p.A, h: p.Ec, depth: p.B, kind: 'solid' },
+    { id: 'stub', x: postX, y: capY + p.Ec, w: postW, h: p.Fee, depth: postW, kind: 'solid' }
+  ];
+}
+
+// The container width below which dimension labels are dropped. The
+// labels are fixed-size text, so they do not shrink with the panel: in a
+// thumbnail-sized container they overlap into unreadable mush and bury
+// the object they annotate. Both renderers use this one threshold so the
+// two views behave identically at the same size. The thumbnail is a
+// preview; "Agrandir le diagramme" is how you read values.
+export const LABEL_MIN_CONTAINER_WIDTH = 420;
