@@ -143,9 +143,17 @@ label text always shows the true `value`, never the clamped one.
 - "Agrandir" click: `modal.js` re-parents the canvas + overlay DOM node
   into the modal's diagram container, calls `renderer.setSize(...)` and
   updates camera aspect, shows the modal.
-- View mode (2D vs 3D) lives in `state.js` as `viewMode` so the
-  thumbnail's toggle and the modal's toggle are just two DOM buttons
-  bound to the same state value — no duplicated toggle logic.
+- View mode (2D vs 3D) is a closure-local `viewMode` variable in
+  `js/app.js` (not a field on the `state.js` params object — it isn't a
+  diagram parameter, it's UI state, so pub-sub notification would be
+  overkill). `app.js` exposes it via `window.__courtierApp.getViewMode()`
+  / `setViewMode(mode)`; `js/modal.js` calls `getApp().setViewMode(...)`
+  on its own toggle buttons rather than keeping a second copy of the
+  mode. Both the thumbnail's toggle and the modal's toggle end up
+  driving the exact same variable through the same setter, which is the
+  property this section actually cares about: the two toggles cannot
+  disagree, because there is only ever one source of truth for which
+  view is showing.
 - Close (`x` or backdrop click): re-parent canvas + overlay back to the
   thumbnail container, resize back down.
 
@@ -160,24 +168,50 @@ label text always shows the true `value`, never the clamped one.
 
 ## 10. Testing / Verification Plan
 
-No backend, so testing is manual browser verification (this repo has no
-existing test runner to extend, and adding one for a static demo is out
-of scope per YAGNI):
+`state.js` and `dimensions.js` have no DOM/WebGL dependency and are
+covered by automated tests under `tests/` (`node:test` +
+`node:assert/strict`; run with `node --test tests/*.mjs` — see the
+README). Everything DOM/WebGL-dependent (`diagram2d.js`, `diagram3d.js`,
+`app.js`, `modal.js`) is verified manually in-browser:
 
-1. Serve via `python3 -m http.server` in the project root, open in browser.
+1. Serve via `python3 -m http.server` in the project root, open in
+   browser (a plain `file://` open fails — the ES module imports and the
+   pinned Three.js importmap are subject to browser CORS restrictions
+   on the `file:` scheme). Confirm the console is free of errors and
+   404s (including the favicon, which is an inline `data:` URI in
+   `index.html` specifically so it doesn't 404).
 2. Verify `THREE.REVISION` logs, `OrbitControls` and `CSS2DRenderer`
    both instantiate without console errors (first implementation step,
    before writing scene code — addon import paths shift across
    pinned Three.js versions).
 3. Change each numeric input one at a time; confirm both the 3D scene
    and (after toggling) the 2D SVG update their geometry and labels
-   immediately, and that the two views agree numerically.
+   immediately, and that the two views agree numerically. The 2D
+   view's SVG `viewBox` is derived from the actual projected extent of
+   the current `dimensionRecords` (see `diagram2d.js`), not a fixed
+   constant, so also confirm that extreme param values (very small or
+   very large) don't clip witness lines or labels. In 3D, confirm the
+   camera keeps the whole model (including the offset dimension labels)
+   framed after a param change — `diagram3d.js` recomputes a bounding
+   box of the rebuilt geometry each time and re-fits the camera distance
+   to it (preserving the current orbit direction) rather than resetting
+   to a fixed camera position.
 4. Open the enlarge modal from both 2D and 3D mode; confirm the same
    live view (not a stale duplicate) appears enlarged, orbit controls
-   still work, closing returns it correctly to the thumbnail.
+   still work, closing returns it correctly to the thumbnail. Only one
+   WebGL context exists throughout — `modal.js` re-parents the existing
+   canvas/overlay/svg DOM nodes between the thumbnail and modal
+   containers rather than creating a second renderer, and `diagram3d.js`
+   disposes the previous frame's geometries/materials on every rebuild
+   (`disposeGroup`) so switching params or view modes repeatedly does
+   not leak GPU resources or stray CSS2D label DOM nodes.
 5. Resize the browser window with the modal open and closed; confirm
    canvas/labels stay aligned (no drift between SVG lines and DOM
-   labels vs the WebGL canvas).
+   labels vs the WebGL canvas). `diagram3d.js`'s `resize()` reads the
+   canvas's *current* parent element (not a captured reference to the
+   original thumbnail container), so this must hold both immediately
+   after opening/closing the modal and after a plain window resize
+   while the modal is open.
 
 ## 11. Out of Scope / Future Ideas (not building now)
 
