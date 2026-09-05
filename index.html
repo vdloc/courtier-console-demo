@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Courtier Console Demo</title>
+  <title>Broker Console Demo</title>
   <link rel="stylesheet" href="css/style.css">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231a2b4c'/%3E%3Crect x='8' y='14' width='16' height='12' fill='none' stroke='%23e07a2c' stroke-width='2'/%3E%3Cline x1='16' y1='6' x2='16' y2='14' stroke='%23e07a2c' stroke-width='2'/%3E%3C/svg%3E">
   <script type="importmap">
@@ -17,7 +17,7 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="topbar-brand">Courtier Console</div>
+    <div class="topbar-brand">Broker Console</div>
     <div class="topbar-actions">
       <span class="icon-btn" title="Notifications">&#128276;</span>
       <span class="user-menu">Loïc Dupont &#9662;</span>
@@ -26,10 +26,10 @@
 
   <div class="layout">
     <main class="main-column">
-      <h1>Données</h1>
+      <h1>Parameters</h1>
 
       <section class="form-section">
-        <h2>Cadre</h2>
+        <h2>Frame</h2>
         <div class="field-grid">
           <label>A (m) <input type="number" id="input-A" min="0" max="2" step="0.01"></label>
           <label>B (m) <input type="number" id="input-B" min="0" max="2" step="0.01"></label>
@@ -39,7 +39,7 @@
       </section>
 
       <section class="form-section">
-        <h2>Poteau</h2>
+        <h2>Post</h2>
         <div class="field-grid">
           <label>Hv (m) <input type="number" id="input-Hv" min="0" max="2" step="0.01"></label>
           <label>Ec (m) <input type="number" id="input-Ec" min="0" max="1" step="0.01"></label>
@@ -48,7 +48,7 @@
       </section>
 
       <section class="form-section">
-        <h2>Plaque d&rsquo;appui</h2>
+        <h2>Bearing plate</h2>
         <div class="field-grid">
           <label>Ep (m) <input type="number" id="input-Ep" min="0" max="0.5" step="0.005"></label>
           <label>&Phi;m (m) <input type="number" id="input-PhiM" min="0" max="0.5" step="0.005"></label>
@@ -61,9 +61,9 @@
 
     <aside class="right-rail">
       <div class="validation-chips">
-        <span class="chip chip-ok">Cadre &#10003;</span>
-        <span class="chip chip-ok">Poteau &#10003;</span>
-        <span class="chip chip-ok">Plaque d&rsquo;appui &#10003;</span>
+        <span class="chip chip-ok">Frame &#10003;</span>
+        <span class="chip chip-ok">Post &#10003;</span>
+        <span class="chip chip-ok">Bearing plate &#10003;</span>
       </div>
 
       <div class="diagram-panel">
@@ -72,11 +72,11 @@
           <button id="view-toggle-3d" class="toggle-btn">3D</button>
         </div>
         <div id="diagram-thumbnail" class="diagram-container"></div>
-        <button id="expand-diagram-btn" class="expand-btn">Agrandir le diagramme</button>
+        <button id="expand-diagram-btn" class="expand-btn">Enlarge diagram</button>
       </div>
 
       <div class="warning-callout">
-        Vérifiez les paramètres avant validation finale.
+        Check the parameters before final validation.
       </div>
 
       <div id="result-rows" class="result-rows"></div>
@@ -86,8 +86,8 @@
   <div id="modal-overlay" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal">
       <div class="modal-header">
-        <h2 id="modal-title">Agrandir le diagramme</h2>
-        <button id="modal-close-btn" class="close-btn" aria-label="Fermer">&times;</button>
+        <h2 id="modal-title">Enlarge diagram</h2>
+        <button id="modal-close-btn" class="close-btn" aria-label="Close">&times;</button>
       </div>
       <div class="diagram-toggle">
         <button id="modal-view-toggle-2d" class="toggle-btn active">2D</button>

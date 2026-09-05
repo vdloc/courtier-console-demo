@@ -27,14 +27,37 @@ function moveDiagramInto(targetContainer) {
   if (app.view2d.resize) app.view2d.resize();
 }
 
+// Where focus was before the modal opened, so it can be handed back on
+// close rather than dumped on <body>.
+let lastFocused = null;
+
+function focusableInModal() {
+  return [...overlayEl.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+    .filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null);
+}
+
 function openModal() {
+  lastFocused = document.activeElement;
   overlayEl.classList.remove('hidden');
   moveDiagramInto(modalContainer);
+  // aria-modal="true" tells assistive tech that everything outside is
+  // inert; that is only true if focus actually moves in and stays in.
+  const first = focusableInModal()[0];
+  if (first) first.focus();
 }
 
 function closeModal() {
   overlayEl.classList.add('hidden');
   moveDiagramInto(thumbnailContainer);
+  // Hand focus back to whatever opened the dialog. If that is gone (or was
+  // never a focusable element), the expand button is the control the modal
+  // belongs to, so it is the sane landing spot -- never <body>.
+  const target =
+    lastFocused && lastFocused.isConnected && lastFocused !== document.body
+      ? lastFocused
+      : expandBtn;
+  target.focus();
+  lastFocused = null;
 }
 
 expandBtn.addEventListener('click', openModal);
@@ -50,7 +73,23 @@ modalToggle3d.addEventListener('click', () => getApp().setViewMode('3d'));
 // Asserting the ARIA attribute without honouring it is worse than not
 // asserting it at all.
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && !overlayEl.classList.contains('hidden')) {
+  if (overlayEl.classList.contains('hidden')) return;
+  if (e.key === 'Escape') {
     closeModal();
+    return;
+  }
+  // Keep Tab inside the dialog: without this, tabbing walks out into the
+  // form behind the overlay, which aria-modal claims is inert.
+  if (e.key !== 'Tab') return;
+  const items = focusableInModal();
+  if (items.length === 0) return;
+  const first = items[0];
+  const last = items[items.length - 1];
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
   }
 });

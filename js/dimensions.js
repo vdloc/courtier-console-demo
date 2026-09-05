@@ -47,9 +47,19 @@ export const dimensionRecords = [
     label: (p) => `Hv = ${p.Hv.toFixed(2)}`
   },
   {
-    id: 'Ec',
+    // A shim between the post head and the bearing plate. Every member
+    // above the post head is lifted by it, so it appears in the anchors
+    // of Ec, Fee and Uh below as well.
+    id: 'HsD',
     from: (p) => ({ x: 0, y: p.H1 + p.H2 + p.Hv, z: 0 }),
-    to: (p) => ({ x: 0, y: p.H1 + p.H2 + p.Hv + p.Ec, z: 0 }),
+    to: (p) => ({ x: 0, y: p.H1 + p.H2 + p.Hv + p.HsD, z: 0 }),
+    offsetDir: { x: 1, y: 0, z: 0 },
+    label: (p) => `HsD = ${p.HsD.toFixed(2)}`
+  },
+  {
+    id: 'Ec',
+    from: (p) => ({ x: 0, y: p.H1 + p.H2 + p.Hv + p.HsD, z: 0 }),
+    to: (p) => ({ x: 0, y: p.H1 + p.H2 + p.Hv + p.HsD + p.Ec, z: 0 }),
     offsetDir: { x: -1, y: 0, z: 0 },
     label: (p) => `Ec = ${p.Ec.toFixed(2)}`
   },
@@ -62,8 +72,8 @@ export const dimensionRecords = [
   },
   {
     id: 'Fee',
-    from: (p) => ({ x: 0, y: p.H1 + p.H2 + p.Hv + p.Ec, z: 0 }),
-    to: (p) => ({ x: 0, y: p.H1 + p.H2 + p.Hv + p.Ec + p.Fee, z: 0 }),
+    from: (p) => ({ x: 0, y: p.H1 + p.H2 + p.Hv + p.HsD + p.Ec, z: 0 }),
+    to: (p) => ({ x: 0, y: p.H1 + p.H2 + p.Hv + p.HsD + p.Ec + p.Fee, z: 0 }),
     offsetDir: { x: -1, y: 0, z: 0 },
     label: (p) => `Fee = ${p.Fee.toFixed(2)}`
   },
@@ -76,8 +86,8 @@ export const dimensionRecords = [
   },
   {
     id: 'Uh',
-    from: (p) => ({ x: p.A, y: p.H1 + p.H2 + p.Hv, z: 0 }),
-    to: (p) => ({ x: p.A + visualScale('Uh', p.Uh), y: p.H1 + p.H2 + p.Hv, z: 0 }),
+    from: (p) => ({ x: p.A, y: p.H1 + p.H2 + p.Hv + p.HsD, z: 0 }),
+    to: (p) => ({ x: p.A + visualScale('Uh', p.Uh), y: p.H1 + p.H2 + p.Hv + p.HsD, z: 0 }),
     offsetDir: { x: 0, y: 1, z: 0 },
     label: (p) => `Uh = ${p.Uh.toFixed(2)}`
   },
@@ -108,15 +118,34 @@ export function elevationShapes(p) {
   const blockTop = p.H1 + p.H2;
   const postW = visualScale('Ep', p.Ep);
   const postX = (p.A - postW) / 2;
-  const capY = blockTop + p.Hv;
+  // HsD is a shim between the post head and the bearing plate, so every
+  // member above the post is lifted by it. The dimension records stack the
+  // same way, which is what keeps the drawn object and its annotations
+  // consistent when HsD is non-zero.
+  const postTop = blockTop + p.Hv;
+  const capY = postTop + p.HsD;
   const pipeH = visualScale('PhiM', p.PhiM);
-  return [
+  const shapes = [
     { id: 'block', x: 0, y: 0, w: p.A, h: blockTop, depth: p.B, kind: 'solid' },
     { id: 'pipe', x: 0, y: blockTop - pipeH / 2, w: p.A, h: pipeH, depth: pipeH, kind: 'pipe' },
-    { id: 'post', x: postX, y: blockTop, w: postW, h: p.Hv, depth: postW, kind: 'solid' },
+    { id: 'post', x: postX, y: blockTop, w: postW, h: p.Hv, depth: postW, kind: 'solid' }
+  ];
+  if (p.HsD > 0) {
+    shapes.push({
+      id: 'shim',
+      x: postX - postW * 0.3,
+      y: postTop,
+      w: postW * 1.6,
+      h: p.HsD,
+      depth: postW * 1.6,
+      kind: 'solid'
+    });
+  }
+  shapes.push(
     { id: 'cap', x: 0, y: capY, w: p.A, h: p.Ec, depth: p.B, kind: 'solid' },
     { id: 'stub', x: postX, y: capY + p.Ec, w: postW, h: p.Fee, depth: postW, kind: 'solid' }
-  ];
+  );
+  return shapes;
 }
 
 // The container width below which dimension labels are dropped. The

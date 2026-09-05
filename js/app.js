@@ -68,12 +68,26 @@ function setupFormInputs() {
     input.value = params[key];
     input.addEventListener('input', () => {
       const value = parseFloat(input.value);
-      if (Number.isFinite(value) && value >= 0) {
+      // The markup's min/max are only advisory: a browser lets you type
+      // past them, and typing 50 into a field capped at 2 produced a
+      // hairline diagram. Enforce the declared range here so the geometry
+      // stays sane, and reject anything non-finite.
+      const min = input.hasAttribute('min') ? parseFloat(input.min) : 0;
+      const max = input.hasAttribute('max') ? parseFloat(input.max) : Infinity;
+      if (Number.isFinite(value) && value >= min && value <= max) {
+        input.classList.remove('invalid');
         setParam(key, value);
+      } else {
+        input.classList.add('invalid');
       }
     });
     input.addEventListener('blur', () => {
-      input.value = getParams()[key];
+      // Revert to the last accepted value. Only rewrite the field when it
+      // actually disagrees, so a valid "0.30" is not rewritten to "0.3"
+      // under the user's cursor on every blur.
+      const current = getParams()[key];
+      if (parseFloat(input.value) !== current) input.value = current;
+      input.classList.remove('invalid');
     });
   }
 }

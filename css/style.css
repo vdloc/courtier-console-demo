@@ -81,3 +81,7 @@ body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); col
 .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
 .close-btn { border: none; background: none; font-size: 1.5rem; cursor: pointer; }
 .modal-diagram-container { height: 60vh; }
+
+/* Out-of-range input: the value is rejected, so flag the field. */
+.field-grid input.invalid,
+.field-grid input:invalid { border-color: #c0392b; background: #fdf3f2; }
