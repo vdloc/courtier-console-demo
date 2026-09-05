@@ -34,6 +34,75 @@ export function mountDiagram3D(container) {
   let dynamicGroup = new THREE.Group();
   scene.add(dynamicGroup);
 
+  // Bounding box of the current geometry (block, pipe, dimension lines).
+  // Recomputed every time buildScene() runs; resize() re-fits against
+  // whatever this currently holds. Starts empty so the first resize() call
+  // at mount time (before any buildScene() has run) is a harmless no-op.
+  let currentBox = new THREE.Box3();
+
+  // Padding applied to the fitted distance so the CSS2D labels — which sit
+  // OUTSIDE the geometry bounding box (offset by 0.05 world units, see
+  // dimensionRecords in dimensions.js) and are drawn as DOM elements with
+  // their own pixel padding/border/font — have room to breathe inside the
+  // frustum. 1.3 means the geometry's bounding sphere is fit to only
+  // 1/1.3 ≈ 77% of the available half-fov, leaving ~23% angular margin.
+  // At the default model size (bounding sphere radius ~0.8-0.9 world
+  // units) that margin comfortably covers the 0.05 unit label offset
+  // (≈6% of the radius) plus the label's own ~14px-tall pixel footprint
+  // against a 220-450px tall container (~3-6%). Verified empirically by
+  // measuring actual label getBoundingClientRect() in all required states
+  // (see camera-fit-report.md) rather than tuned by eye alone.
+  const FIT_PADDING = 1.3;
+
+  // Computes the camera distance (from the box's bounding-sphere center)
+  // needed to fit the ENTIRE sphere within the frustum, accounting for
+  // both the vertical fov and the aspect-derived horizontal fov. Using the
+  // bounding sphere (rather than axis-aligned box extents) makes the fit
+  // robust to whatever direction the user has orbited the camera to —
+  // the sphere's silhouette is the same from any angle, so we don't need
+  // to know the current view direction to guarantee coverage.
+  function computeFit(box) {
+    if (box.isEmpty()) return null;
+    const sphere = new THREE.Sphere();
+    box.getBoundingSphere(sphere);
+    if (!(sphere.radius > 0)) return null;
+    const vHalf = THREE.MathUtils.degToRad(camera.fov) / 2;
+    const hHalf = Math.atan(Math.tan(vHalf) * camera.aspect);
+    const limitingHalf = Math.min(vHalf, hHalf);
+    const distance = (sphere.radius / Math.sin(limitingHalf)) * FIT_PADDING;
+    return { distance, center: sphere.center };
+  }
+
+  // Re-fits the camera to `box` while preserving whatever orbit direction
+  // the user (or the initial default) currently has. We deliberately do
+  // NOT reset the camera to the fixed default position on every rebuild:
+  // OrbitControls is user-driven, and snapping the view back to a default
+  // angle every time a slider changes a param (buildScene) or the panel
+  // resizes (thumbnail <-> modal) would fight the user's manual orbit and
+  // feel broken. Instead we keep the current viewing direction (the unit
+  // vector from the orbit target to the camera) and only change the
+  // *distance* and *target* so the (possibly resized) frustum still frames
+  // the (possibly resized) model. This is called from buildScene() and
+  // resize() only — never from the rAF loop — so a manual drag in between
+  // is never overwritten.
+  function fitCameraToBox(box) {
+    const fit = computeFit(box);
+    if (!fit) return;
+    const dir = new THREE.Vector3().subVectors(camera.position, controls.target);
+    if (!(dir.lengthSq() > 1e-8)) {
+      // First fit (or a degenerate target==position state): fall back to
+      // the original default viewing direction.
+      dir.set(1.2, 1.0, 1.5);
+    }
+    dir.normalize();
+    controls.target.copy(fit.center);
+    camera.position.copy(fit.center).addScaledVector(dir, fit.distance);
+    camera.near = Math.max(0.01, fit.distance / 100);
+    camera.far = Math.max(100, fit.distance * 10);
+    camera.updateProjectionMatrix();
+    controls.update();
+  }
+
   function resize() {
     // Size from the canvas's CURRENT parent, not the container captured in
     // this closure: after modal.js re-parents `canvas` into the modal (or
@@ -56,6 +125,11 @@ export function mountDiagram3D(container) {
     labelRenderer.setSize(w, h);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    // Aspect ratio just changed (thumbnail <-> modal, or a window resize);
+    // re-fit against the last-known geometry box so labels stay framed at
+    // the new size. No-op (via computeFit's empty-box guard) before the
+    // first buildScene() call has run.
+    fitCameraToBox(currentBox);
   }
 
   // Dispose every geometry/material owned by the group, and detach CSS2D
@@ -135,6 +209,15 @@ export function mountDiagram3D(container) {
     }
 
     scene.add(dynamicGroup);
+
+    // Geometry just changed (new params); recompute the fit box and re-fit
+    // the camera so the new geometry (and its labels, via FIT_PADDING) is
+    // fully framed. The bounding box intentionally covers only the actual
+    // meshes/lines (block, pipe, dimension lines) — CSS2DObjects have no
+    // geometry and are skipped by Box3.setFromObject — the labels' own
+    // extra offset is handled by FIT_PADDING rather than by growing the box.
+    currentBox = new THREE.Box3().setFromObject(dynamicGroup);
+    fitCameraToBox(currentBox);
   }
 
   function render(params) {
