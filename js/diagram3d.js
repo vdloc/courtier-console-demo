@@ -35,8 +35,15 @@ export function mountDiagram3D(container) {
   scene.add(dynamicGroup);
 
   function resize() {
-    const w = container.clientWidth || 1;
-    const h = container.clientHeight || 1;
+    // Size from the canvas's CURRENT parent, not the container captured in
+    // this closure: after modal.js re-parents `canvas` into the modal (or
+    // back into the thumbnail), the original `container` may be empty or a
+    // different size, and sizing from it would fight the modal's own layout.
+    // Falls back to the original container if the canvas is (momentarily)
+    // detached from any parent.
+    const sizingEl = canvas.parentElement || container;
+    const w = sizingEl.clientWidth || 1;
+    const h = sizingEl.clientHeight || 1;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     // The brief's `setSize(w, h, false)` skips updating canvas.style, which
     // is fine at pixelRatio 1 but not once setPixelRatio(2) is added above:

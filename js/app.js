@@ -15,7 +15,12 @@ function applyViewModeVisibility() {
   // Both views are mounted into the same container; only one is visible/interactive at a time.
   view3d.canvas.style.display = viewMode === '3d' ? 'block' : 'none';
   view3d.overlay.style.display = viewMode === '3d' ? 'block' : 'none';
-  const svgEl = thumbnailContainer.querySelector('svg');
+  // Container-agnostic lookup: modal.js re-parents the svg into
+  // #modal-diagram-container while the modal is open, so
+  // thumbnailContainer.querySelector('svg') would return null then and this
+  // function could never un-hide it again (e.g. switching 3d -> 2d inside
+  // the open modal).
+  const svgEl = document.querySelector('#diagram-thumbnail svg, #modal-diagram-container svg');
   if (svgEl) svgEl.style.display = viewMode === '2d' ? 'block' : 'none';
 }
 
