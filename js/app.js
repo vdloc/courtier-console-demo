@@ -70,6 +70,6 @@ document.getElementById('view-toggle-3d').addEventListener('click', () => setVie
 setupFormInputs();
 subscribe(renderAll);
 renderAll(getParams());
-applyViewModeVisibility();
+setViewMode(viewMode);
 
 window.__courtierApp = { view2d, view3d, getViewMode: () => viewMode, setViewMode };
