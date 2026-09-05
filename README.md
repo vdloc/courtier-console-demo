@@ -10,7 +10,8 @@ of a support structure and pipe run.
 It demonstrates:
 
 - Driving two independent renderers (an SVG 2D elevation view and a
-  Three.js 3D scene) off one shared data model, so they can never disagree.
+  Three.js 3D scene) off one shared data model, so they draw the same
+  object with the same numbers.
 - A minimal pub-sub state store with no framework.
 - Re-parenting a single live WebGL canvas + CSS2D label overlay between a
   thumbnail panel and a modal, instead of creating a second renderer.
@@ -62,17 +63,27 @@ in-browser — see `docs/superpowers/specs/2026-09-05-courtier-console-design.md
   params object.
 
 - **`js/dimensions.js`** — the single source of truth that keeps the 2D and
-  3D views from drifting apart. It exports `dimensionRecords`, one array of
-  records (not duplicated per view) where each record describes one
-  annotated dimension as a pair of 3D anchor functions (`from(params)`,
-  `to(params)`), an offset direction for the witness line, and a label
-  function. `js/diagram3d.js` builds dashed 3D witness lines + CSS2D labels
-  directly from these anchors; `js/diagram2d.js` projects the *same*
-  anchors onto a 2D elevation plane to draw SVG lines + text. Because both
-  renderers read the same records, they cannot disagree numerically. This
-  file also exports `visualScale(key, value)`, which clamps thin members
-  (insulation/pipe thickness, offsets) to a visible floor for rendering
-  only — the label text always shows the true value.
+  3D views from drifting apart. It exports two shared tables, neither
+  duplicated per view:
+
+  - `dimensionRecords` — one record per annotated dimension, as a pair of
+    3D anchor functions (`from(params)`, `to(params)`), an offset direction
+    for the witness line, and a label function.
+  - `elevationShapes(params)` — the object being measured, as plain
+    rectangles. `js/diagram2d.js` draws them as SVG rects;
+    `js/diagram3d.js` extrudes each one along Z into a mesh.
+
+  Both renderers read both tables, so the two views draw the same object
+  with the same numbers. This is the part of the design worth stealing: the
+  temptation is to let each renderer own its own geometry, and that is
+  exactly how two views drift apart.
+
+  The file also exports `visualScale(key, value)`, which clamps thin
+  members (insulation/pipe thickness, offsets) to a visible floor for
+  rendering only — the label text always shows the true value — and
+  `LABEL_MIN_CONTAINER_WIDTH`, the panel width below which both renderers
+  drop their labels (they are fixed-size text and would otherwise overlap
+  into mush in the small thumbnail; "Agrandir" is how you read values).
 
 - **`js/diagram3d.js`** — the Three.js scene (box + pipe + dimension lines
   and labels), rebuilt wholesale from `dimensionRecords` on every param
@@ -117,7 +128,6 @@ for the implementation plan this was built from.
 - **No build step, no framework.** Plain ES modules and a pinned Three.js
   importmap; there is deliberately no bundler, no TypeScript, and no
   `package.json`.
-- **No routing.** The sidebar's other nav items are decorative; only the
-  one active screen exists.
+- **No routing.** This is a single screen; there is no navigation.
 - **Not mobile-responsive.** This mirrors a desktop-only console UI
   screenshot and hasn't been adapted for small viewports.

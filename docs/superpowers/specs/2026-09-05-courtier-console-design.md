@@ -16,8 +16,8 @@ no persistence beyond in-memory state.
 - No build tooling (no bundler, no npm install, no TypeScript compiler).
 - No real engineering/insulation calculations — dimensions are cosmetic,
   not validated against any code/standard.
-- No multi-page routing. Sidebar nav items other than the one active
-  screen are decorative (clickable but inert, or simply visual).
+- No multi-page routing. The demo is a single screen with no navigation
+  (an earlier draft carried a decorative sidebar; it was removed).
 - No persistence (values reset to defaults on reload) — acceptable for a demo.
 
 ## 3. Stack
@@ -36,7 +36,7 @@ command).
 courtier-console-demo/
   index.html
   css/
-    style.css          # console chrome: topbar, sidebar, form, right rail, modal
+    style.css          # console chrome: topbar, form, right rail, modal
   js/
     app.js              # entry point: wires form inputs <-> shared state <-> both diagram views
     state.js            # single params object + simple pub-sub (subscribe/notify)
@@ -50,8 +50,6 @@ courtier-console-demo/
 ## 5. Layout (mirrors screenshot)
 
 - **Top bar**: product name/logo placeholder, decorative icons, user menu.
-- **Left sidebar**: static list of module names (icons + labels), one
-  marked active — no routing.
 - **Main column**: form grouped into labelled sections ("Cadre",
   "Poteau", "Plaque d'appui", etc. — cosmetic French labels matching the
   domain), each a small grid of number inputs with unit suffixes (m).
@@ -114,7 +112,11 @@ not duplicated per view:
 - **2D renderer** (`diagram2d.js`): projects the same `from`/`to`
   anchors onto a fixed elevation plane (drop one axis) to draw SVG
   `<line>` + `<text>` — reusing the identical record list keeps the two
-  views from drifting apart.
+  views from drifting apart. Both renderers also build the object itself
+  from a shared `elevationShapes(params)` table (rectangles in the X/Y
+  plane, extruded along Z for 3D), so the views depict the same assembly
+  and not two interpretations of it. Witness lines are offset by
+  `offsetDir` so annotations sit beside the object rather than through it.
 
 ### 6.3 Scale handling
 
