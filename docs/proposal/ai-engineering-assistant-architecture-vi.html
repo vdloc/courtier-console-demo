@@ -1,0 +1,1096 @@
+<title>Kiến trúc AI Engineering Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#F7F8FA; --panel:#FFFFFF; --ink:#16191F; --ink-2:#3A424E;
+  --muted:#5C6470; --rule:#D8DDE4; --rule-soft:#E7EBF0;
+  --accent:#1F4E79; --accent-2:#2E6DA4; --accent-wash:#E9EFF6;
+  --flag:#A34A21; --flag-wash:#F7EDE7;
+  --code-bg:#F1F3F7;
+  --sans:"Open Sans","Clear Sans","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --serif:"Open Sans","Clear Sans","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:"DejaVu Sans Mono","IBM Plex Mono",Consolas,"Liberation Mono",Menlo,monospace;
+  --rail:19rem; --measure:41rem;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#12151A; --panel:#181C23; --ink:#E4E7EC; --ink-2:#C3C9D2;
+    --muted:#8C95A3; --rule:#2B313B; --rule-soft:#232932;
+    --accent:#7FB2E5; --accent-2:#9CC6F0; --accent-wash:#1B2A3A;
+    --flag:#D98A63; --flag-wash:#2E211B;
+    --code-bg:#1E232B;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#12151A; --panel:#181C23; --ink:#E4E7EC; --ink-2:#C3C9D2;
+  --muted:#8C95A3; --rule:#2B313B; --rule-soft:#232932;
+  --accent:#7FB2E5; --accent-2:#9CC6F0; --accent-wash:#1B2A3A;
+  --flag:#D98A63; --flag-wash:#2E211B;
+  --code-bg:#1E232B;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--serif);
+  font-size:16px;line-height:1.7;-webkit-font-smoothing:antialiased}
+.layout{display:grid;grid-template-columns:var(--rail) minmax(0,1fr);align-items:start}
+
+/* ---------- rail ---------- */
+.rail{position:sticky;top:0;height:100vh;overflow-y:auto;border-right:1px solid var(--rule);
+  background:var(--panel);padding:2rem 1.25rem 3rem;display:flex;flex-direction:column;gap:1.25rem}
+.railhead{display:flex;flex-direction:column;gap:.4rem;padding-bottom:1rem;border-bottom:1px solid var(--rule)}
+.doclabel{font-family:var(--mono);font-size:.63rem;letter-spacing:.14em;text-transform:uppercase;color:var(--flag)}
+.railtitle{font-family:var(--sans);font-weight:600;font-size:.95rem;line-height:1.35;color:var(--ink);margin:0}
+.railsub{font-family:var(--sans);font-size:.75rem;color:var(--muted);margin:0}
+.navgroup{font-family:var(--sans);font-size:.68rem;font-weight:600;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--muted);margin:1.1rem 0 .35rem}
+.navlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px}
+.navlist a{display:grid;grid-template-columns:1.6rem 1fr;gap:.5rem;align-items:baseline;
+  font-family:var(--sans);font-size:.8rem;line-height:1.35;color:var(--ink-2);
+  text-decoration:none;padding:.34rem .5rem;border-radius:3px;border-left:2px solid transparent}
+.navlist a:hover{background:var(--accent-wash);color:var(--accent)}
+.navnum{font-family:var(--mono);font-size:.7rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.navlist a[aria-current="true"]{background:var(--accent-wash);color:var(--accent);
+  border-left-color:var(--accent);font-weight:600}
+.navlist a[aria-current="true"] .navnum{color:var(--accent)}
+.railfoot{margin-top:auto;padding-top:1rem;border-top:1px solid var(--rule);
+  display:flex;flex-direction:column;gap:.6rem}
+.themebtn{font-family:var(--sans);font-size:.74rem;color:var(--muted);background:none;
+  border:1px solid var(--rule);border-radius:3px;padding:.4rem .6rem;cursor:pointer;text-align:left}
+.themebtn:hover{border-color:var(--accent);color:var(--accent)}
+.stats{font-family:var(--mono);font-size:.66rem;color:var(--muted);line-height:1.6;
+  font-variant-numeric:tabular-nums}
+
+/* ---------- main ---------- */
+.main{padding:0 3rem 8rem;min-width:0}
+.wrap{max-width:var(--measure);margin:0 auto}
+.masthead{padding:4.5rem 0 2rem;border-bottom:2px solid var(--ink)}
+.eyebrow{font-family:var(--mono);font-size:.68rem;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--flag);margin:0 0 1.1rem}
+h1{font-family:var(--sans);font-weight:700;font-size:2.35rem;line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 .7rem;text-wrap:balance}
+.subtitle{font-family:var(--sans);font-size:1.02rem;font-weight:400;color:var(--muted);margin:0 0 2rem}
+.metagrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.05rem 2rem;margin:0}
+.metaitem{display:grid;grid-template-columns:9.5rem 1fr;gap:.6rem;align-items:baseline;
+  padding:.42rem 0;border-bottom:1px solid var(--rule-soft)}
+.metaitem dt{font-family:var(--mono);font-size:.68rem;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--muted)}
+.metaitem dd{margin:0;font-family:var(--sans);font-size:.83rem;color:var(--ink-2)}
+
+article{padding-top:1rem}
+h2{font-family:var(--sans);font-weight:700;font-size:1.62rem;line-height:1.25;letter-spacing:-.01em;
+  margin:4.5rem 0 1.4rem;padding-top:1.6rem;border-top:1px solid var(--rule);
+  scroll-margin-top:1.5rem;text-wrap:balance}
+h3{font-family:var(--sans);font-weight:600;font-size:1.12rem;line-height:1.3;
+  margin:2.9rem 0 .85rem;scroll-margin-top:1.5rem;text-wrap:balance}
+h4{font-family:var(--sans);font-weight:600;font-size:.94rem;line-height:1.35;color:var(--ink-2);
+  margin:2.1rem 0 .7rem;scroll-margin-top:1.5rem}
+.secnum{display:block;font-family:var(--mono);font-size:.72rem;font-weight:500;letter-spacing:.1em;
+  color:var(--flag);margin-bottom:.45rem;font-variant-numeric:tabular-nums}
+h3 .secnum,h4 .secnum{display:inline;margin:0 .55rem 0 0;color:var(--muted);font-size:.78rem}
+p{margin:0 0 1.15rem}
+article>hr{display:none}
+strong{font-weight:600;color:var(--ink)}
+em{color:var(--ink-2)}
+a{color:var(--accent);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:2px}
+ul,ol{margin:0 0 1.25rem;padding-left:1.35rem;display:flex;flex-direction:column;gap:.45rem}
+li{padding-left:.2rem}
+li::marker{color:var(--muted)}
+code{font-family:var(--mono);font-size:.85em;background:var(--code-bg);
+  padding:.1em .35em;border-radius:3px;color:var(--ink-2)}
+.tok{font-family:var(--mono);font-size:.84em;font-weight:500;color:var(--flag);
+  background:var(--flag-wash);padding:.1em .38em;border-radius:3px;white-space:nowrap}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto;margin:0 0 1.9rem;border:1px solid var(--rule);border-radius:4px;
+  background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-family:var(--sans);font-size:.83rem;line-height:1.55}
+thead th{background:var(--accent-wash);color:var(--accent);font-weight:600;text-align:left;
+  font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;padding:.7rem .85rem;
+  border-bottom:1px solid var(--rule);white-space:nowrap}
+td{padding:.66rem .85rem;border-bottom:1px solid var(--rule-soft);vertical-align:top;color:var(--ink-2)}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:nth-child(even){background:color-mix(in srgb,var(--accent-wash) 32%,transparent)}
+td strong{color:var(--ink)}
+table.keyvalue td:first-child{width:11rem;color:var(--muted);font-size:.78rem}
+
+/* ---------- diagrams / code ---------- */
+.diagram{margin:0 0 2rem;padding:1.4rem 1.2rem .9rem;border:1px solid var(--rule);
+  border-radius:4px;background:var(--panel)}
+.diagram-scroll{overflow-x:auto}
+.diagram .mermaid{margin:0;display:flex;justify-content:center;min-width:min-content}
+.diagram figcaption{font-family:var(--mono);font-size:.67rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);margin-top:1rem;padding-top:.7rem;border-top:1px solid var(--rule-soft)}
+.codewrap{margin:0 0 1.9rem;border:1px solid var(--rule);border-radius:4px;overflow:hidden;
+  background:var(--code-bg)}
+.codelabel{font-family:var(--mono);font-size:.64rem;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--muted);padding:.5rem .9rem;border-bottom:1px solid var(--rule);background:var(--panel)}
+pre.code{margin:0;padding:1rem .9rem;overflow-x:auto;font-family:var(--mono);font-size:14px;
+  line-height:1.6;color:var(--ink-2)}
+pre.code code{background:none;padding:0;font-size:inherit}
+
+/* ---------- scenario ---------- */
+.scenario{margin:0 0 1.9rem;padding:1.15rem 1.3rem;background:var(--accent-wash);
+  border-left:3px solid var(--accent);border-radius:0 4px 4px 0}
+.scenario p{font-family:var(--sans);font-size:.87rem;margin-bottom:.7rem}
+.scenario p:last-child,.scenario ul:last-child{margin-bottom:0}
+.scenario ul{font-family:var(--sans);font-size:.85rem;margin-bottom:0}
+
+/* ---------- responsive ---------- */
+@media (max-width:1020px){
+  .layout{grid-template-columns:1fr}
+  .rail{position:static;height:auto;border-right:none;border-bottom:1px solid var(--rule);
+    padding:1.75rem 1.5rem}
+  .railfoot{margin-top:1rem}
+  .main{padding:0 1.5rem 5rem}
+  .masthead{padding-top:2.5rem}
+  h1{font-size:1.85rem}
+  .metagrid{grid-template-columns:1fr}
+  .metaitem{grid-template-columns:8rem 1fr}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+@media print{
+  .rail{display:none}
+  .layout{display:block}
+  .main{padding:0}
+  body{background:#fff;color:#000;font-size:10.5pt}
+  h2{break-after:avoid;page-break-after:avoid}
+  .tablewrap,.diagram,.codewrap{break-inside:avoid;page-break-inside:avoid}
+}
+</style>
+
+<div class="layout">
+  <aside class="rail">
+    <div class="railhead">
+      <p class="doclabel">Nội bộ — Hạn chế</p>
+      <p class="railtitle">Đề xuất kiến trúc hệ thống AI Engineering Assistant</p>
+      <p class="railsub">Phiên bản 1.0 · 06/09/2026</p>
+    </div>
+    <nav aria-label="Mục lục">
+<ul class="navlist">
+<li><a href="#0-giả-định-phạm-vi-và-quyết-định-kiến-trúc"><span class="navnum">0</span><span class="navtxt">Giả định, phạm vi và quyết định kiến trúc</span></a></li>
+</ul>
+<p class="navgroup">Phần I — Bối cảnh và mục tiêu</p>
+<ul class="navlist">
+<li><a href="#1-tóm-tắt-dành-cho-lãnh-đạo"><span class="navnum">1</span><span class="navtxt">Tóm tắt dành cho lãnh đạo</span></a></li>
+<li><a href="#2-hiện-trạng-vấn-đề-và-cơ-hội"><span class="navnum">2</span><span class="navtxt">Hiện trạng, vấn đề và cơ hội</span></a></li>
+</ul>
+<p class="navgroup">Phần II — Phạm vi và kiến trúc giải pháp</p>
+<ul class="navlist">
+<li><a href="#3-tổng-quan-giải-pháp-đề-xuất"><span class="navnum">3</span><span class="navtxt">Tổng quan giải pháp đề xuất</span></a></li>
+<li><a href="#4-kiến-trúc-hệ-thống-tổng-thể"><span class="navnum">4</span><span class="navtxt">Kiến trúc hệ thống tổng thể</span></a></li>
+</ul>
+<p class="navgroup">Phần III — Thiết kế chi tiết</p>
+<ul class="navlist">
+<li><a href="#5-kiến-trúc-ai-agent"><span class="navnum">5</span><span class="navtxt">Kiến trúc AI Agent</span></a></li>
+<li><a href="#6-kiến-trúc-rag"><span class="navnum">6</span><span class="navtxt">Kiến trúc RAG</span></a></li>
+<li><a href="#7-hệ-thống-tri-thức-tình-huống-kỹ-thuật"><span class="navnum">7</span><span class="navtxt">Hệ thống tri thức tình huống kỹ thuật</span></a></li>
+<li><a href="#8-kiến-trúc-dữ-liệu-và-nhật-ký"><span class="navnum">8</span><span class="navtxt">Kiến trúc dữ liệu và nhật ký</span></a></li>
+<li><a href="#9-kiến-trúc-giao-diện-người-dùng"><span class="navnum">9</span><span class="navtxt">Kiến trúc giao diện người dùng</span></a></li>
+<li><a href="#10-đề-xuất-technology-stack"><span class="navnum">10</span><span class="navtxt">Đề xuất technology stack</span></a></li>
+<li><a href="#11-kiến-trúc-mcp"><span class="navnum">11</span><span class="navtxt">Kiến trúc MCP</span></a></li>
+</ul>
+<p class="navgroup">Phần IV — An toàn bảo mật và triển khai</p>
+<ul class="navlist">
+<li><a href="#12-kiến-trúc-bảo-mật"><span class="navnum">12</span><span class="navtxt">Kiến trúc bảo mật</span></a></li>
+<li><a href="#13-lộ-trình-triển-khai"><span class="navnum">13</span><span class="navtxt">Lộ trình triển khai</span></a></li>
+<li><a href="#14-rủi-ro-và-biện-pháp-kiểm-soát"><span class="navnum">14</span><span class="navtxt">Rủi ro và biện pháp kiểm soát</span></a></li>
+</ul>
+<p class="navgroup">Phần V — Định hướng phát triển</p>
+<ul class="navlist">
+<li><a href="#15-định-hướng-phát-triển"><span class="navnum">15</span><span class="navtxt">Định hướng phát triển</span></a></li>
+<li><a href="#16-phụ-lục"><span class="navnum">16</span><span class="navtxt">Phụ lục</span></a></li>
+</ul>
+    </nav>
+    <div class="railfoot">
+      <button class="themebtn" id="themebtn" type="button">Giao diện: Theo hệ thống</button>
+      <p class="stats">17 mục · 17 sơ đồ<br>~24.800 từ<br>Trình phê duyệt chủ trương</p>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="wrap">
+      <header class="masthead">
+        <p class="eyebrow">Đề xuất kiến trúc giải pháp</p>
+        <h1>Đề xuất kiến trúc hệ thống AI Engineering Assistant</h1>
+        <p class="subtitle">Sử dụng Large Language Model, RAG, Tool Calling và MCP</p>
+        <dl class="metagrid">
+<div class="metaitem"><dt>Loại tài liệu</dt><dd>Đề xuất kiến trúc giải pháp (Solution Architecture Proposal)</dd></div>
+<div class="metaitem"><dt>Phiên bản</dt><dd>1.0</dd></div>
+<div class="metaitem"><dt>Ngày phát hành</dt><dd>06/09/2026</dd></div>
+<div class="metaitem"><dt>Người soạn</dt><dd>Bộ phận Kiến trúc giải pháp</dd></div>
+<div class="metaitem"><dt>Đối tượng đọc</dt><dd>Ban Giám đốc, CTO, Trưởng phòng Kỹ thuật, Trưởng bộ phận Thiết kế</dd></div>
+<div class="metaitem"><dt>Mức độ mật</dt><dd>Nội bộ — Hạn chế</dd></div>
+<div class="metaitem"><dt>Trạng thái</dt><dd>Trình phê duyệt chủ trương</dd></div>
+        </dl>
+      </header>
+      <article>
+<h2 id="0-giả-định-phạm-vi-và-quyết-định-kiến-trúc"><span class="secnum">0</span><span class="sectext">Giả định, phạm vi và quyết định kiến trúc</span></h2>
+<p>Phần này được đặt trước nội dung chính theo đúng nguyên tắc của một tài liệu kiến trúc: người đọc cần biết tài liệu dựa trên những giả định nào trước khi đánh giá các đề xuất bên trong. Nếu một giả định sai, phần kiến trúc phụ thuộc vào nó phải được xem xét lại — chứ không phải toàn bộ tài liệu bị bác bỏ.</p>
+<h3 id="01-phạm-vi-tài-liệu"><span class="secnum">0.1</span><span class="sectext">Phạm vi tài liệu</span></h3>
+<p>Tài liệu này đề xuất <strong>kiến trúc giải pháp</strong> cho một hệ thống trợ lý kỹ thuật nội bộ. Nội dung bao gồm: phân tích hiện trạng, mô hình giải pháp, kiến trúc thành phần, mô hình dữ liệu, lộ trình triển khai theo giai đoạn, phân tích rủi ro và định hướng mở rộng.</p>
+<p>Tài liệu <strong>không</strong> bao gồm: dự toán chi phí chi tiết theo từng hạng mục, hồ sơ mua sắm hạ tầng, thiết kế chi tiết cấp module, và kế hoạch nhân sự chính thức. Những nội dung đó thuộc bước tiếp theo, sau khi chủ trương được phê duyệt.</p>
+<h3 id="02-nguyên-tắc-dùng-thuật-ngữ"><span class="secnum">0.2</span><span class="sectext">Nguyên tắc dùng thuật ngữ</span></h3>
+<p>Tài liệu hướng tới người đọc không chuyên về AI. Vì vậy các thuật ngữ tiếng Anh được giữ nguyên — do đây là tên gọi chuẩn trong ngành, dịch ra sẽ gây khó tra cứu về sau — nhưng <strong>luôn kèm một dòng giải thích bằng tiếng Việt ở lần xuất hiện đầu tiên</strong>, và sau đó dùng nhất quán:</p>
+<div class="tablewrap"><table><thead><tr><th>Thuật ngữ giữ nguyên</th><th>Giải thích ngắn</th></tr></thead><tbody><tr><td>LLM (Large Language Model)</td><td>Mô hình ngôn ngữ lớn — phần mềm đọc hiểu và sinh văn bản tự nhiên</td></tr><tr><td>RAG (Retrieval Augmented Generation)</td><td>Cơ chế bắt AI tra cứu tài liệu nội bộ trước khi trả lời</td></tr><tr><td>Tool Calling</td><td>Cơ chế cho phép AI gọi một chức năng phần mềm có sẵn thay vì tự suy đoán kết quả</td></tr><tr><td>MCP (Model Context Protocol)</td><td>Chuẩn giao tiếp để nhiều phần mềm AI khác nhau cùng dùng chung một bộ công cụ</td></tr><tr><td>Agent</td><td>Thành phần điều phối: nhận yêu cầu, quyết định các bước cần làm, gọi công cụ, tổng hợp kết quả</td></tr><tr><td>Embedding</td><td>Biểu diễn số học của một đoạn văn bản, dùng để tìm đoạn có nội dung gần nghĩa</td></tr><tr><td>Vector database</td><td>Kho lưu trữ chuyên cho embedding, phục vụ tìm kiếm theo ngữ nghĩa</td></tr><tr><td>Hallucination</td><td>Hiện tượng mô hình sinh ra nội dung không chính xác nhưng trình bày trôi chảy</td></tr></tbody></table></div>
+<p>Các khái niệm nghiệp vụ dùng tiếng Việt thống nhất: <em>truy xuất</em> (retrieval), <em>dẫn chứng</em> (evidence/citation), <em>kiểm định</em> (verification), <em>phê duyệt</em> (approval), <em>tình huống kỹ thuật</em> (engineering case), <em>nhật ký</em> (log).</p>
+<h3 id="03-giả-định-chính"><span class="secnum">0.3</span><span class="sectext">Giả định chính</span></h3>
+<div class="tablewrap"><table><thead><tr><th>#</th><th>Giả định</th><th>Ảnh hưởng nếu giả định sai</th></tr></thead><tbody><tr><td><span class="tok">GĐ-01</span></td><td>Đơn vị hoạt động trong lĩnh vực tư vấn thiết kế kết cấu và xây dựng — công việc chính là thiết kế, tính toán, kiểm định và lập hồ sơ kết cấu bê tông cốt thép và kết cấu thép.</td><td>Toàn bộ ví dụ trong tài liệu cần thay bằng ví dụ đúng ngành; phần kiến trúc kỹ thuật giữ nguyên.</td></tr><tr><td><span class="tok">GĐ-02</span></td><td>Tài liệu kỹ thuật nội bộ hiện phân tán trên file server, email, ổ đĩa cá nhân và thư mục dự án; định dạng chủ yếu là PDF, DOCX, XLSX và bản vẽ DWG/PDF.</td><td>Nếu đơn vị đã có hệ thống quản lý tài liệu tập trung, giai đoạn 1 rút ngắn đáng kể vì bước thu thập dữ liệu đã hoàn tất.</td></tr><tr><td><span class="tok">GĐ-03</span></td><td>Đơn vị đã có một số công cụ tính toán: bảng tính Excel có công thức, phần mềm phân tích kết cấu thương mại (ETABS, SAP2000, SAFE), và có thể có một vài script riêng.</td><td>Nếu chưa có công cụ nào gọi được tự động, giai đoạn 2 phải bao gồm việc xây dựng calculation service từ đầu, kéo dài thêm khoảng 2–3 tháng.</td></tr><tr><td><span class="tok">GĐ-04</span></td><td>Đơn vị chấp nhận dùng dịch vụ mô hình ngôn ngữ trên cloud trong phạm vi một tài khoản AWS do đơn vị kiểm soát, với cam kết dữ liệu không được dùng để huấn luyện mô hình.</td><td>Nếu bắt buộc chạy on-premise, cần thay bằng mô hình mã nguồn mở tự vận hành; chi phí hạ tầng tăng và chất lượng trả lời giảm.</td></tr><tr><td><span class="tok">GĐ-05</span></td><td>Hồ sơ dự án đã nghiệm thu có thể dùng làm dữ liệu nội bộ, sau khi rà soát ràng buộc bảo mật với chủ đầu tư.</td><td>Nếu phần lớn hồ sơ bị ràng buộc bảo mật, tập dữ liệu ban đầu thu hẹp; cần ưu tiên tiêu chuẩn và quy trình nội bộ trước.</td></tr><tr><td><span class="tok">GĐ-06</span></td><td>Kỹ sư sẵn sàng ghi nhận lại quyết định kỹ thuật dưới dạng có cấu trúc, nếu thao tác mất dưới 2 phút và mang lại lợi ích thấy được.</td><td>Đây là giả định rủi ro nhất. Nếu sai, tầng tri thức tình huống ở Mục 7 không có dữ liệu và hệ thống chỉ dừng ở mức tra cứu tài liệu.</td></tr><tr><td><span class="tok">GĐ-07</span></td><td>Đơn vị có ít nhất một kỹ sư phần mềm nội bộ hoặc đối tác kỹ thuật đủ năng lực vận hành hệ thống trên AWS.</td><td>Nếu không, cần bổ sung chi phí thuê ngoài vận hành dài hạn vào bài toán tài chính.</td></tr><tr><td><span class="tok">GĐ-08</span></td><td>Mọi kết quả do AI đề xuất đều phải được kỹ sư có thẩm quyền phê duyệt trước khi đưa vào hồ sơ chính thức.</td><td>Đây là ràng buộc pháp lý và trách nhiệm nghề nghiệp, không phải lựa chọn thiết kế. Không được nới lỏng trong bất kỳ giai đoạn nào.</td></tr></tbody></table></div>
+<p>Tài liệu sẽ chính xác hơn nếu có thêm ba đầu vào: danh mục tài liệu kỹ thuật hiện có, mô tả hệ thống phần mềm đang vận hành, và sơ đồ quy trình thiết kế thực tế. Khi có các dữ liệu đó, các Mục 2, 6, 7 và 13 nên được hiệu chỉnh theo số liệu thật của đơn vị.</p>
+<h3 id="04-quyết-định-kiến-trúc"><span class="secnum">0.4</span><span class="sectext">Quyết định kiến trúc</span></h3>
+<p>Mỗi quyết định được trình bày theo cấu trúc: <strong>quyết định — phương án đã cân nhắc — lý do lựa chọn</strong>. Đây là những lựa chọn ảnh hưởng dài hạn, khó đảo ngược, cần sự đồng thuận của lãnh đạo trước khi triển khai.</p>
+<p><strong><span class="tok">AD-01</span> — Dùng RAG thay vì huấn luyện lại mô hình trên dữ liệu nội bộ</strong></p>
+<p><em>Phương án cân nhắc:</em> (a) fine-tune một mô hình riêng trên toàn bộ hồ sơ của đơn vị; (b) RAG — giữ mô hình nguyên trạng, nạp tài liệu liên quan vào ngữ cảnh ở mỗi câu hỏi; (c) kết hợp cả hai.</p>
+<p><em>Lựa chọn:</em> phương án (b) cho toàn bộ giai đoạn 1–3.</p>
+<p><em>Lý do:</em> Fine-tuning không cho phép trích dẫn nguồn — mô hình &quot;nhớ&quot; nội dung nhưng không chỉ ra được câu trả lời đến từ trang nào của tài liệu nào. Trong ngành kỹ thuật, một câu trả lời không có dẫn chứng là câu trả lời không dùng được. RAG còn cho phép cập nhật tức thì: sửa một tiêu chuẩn thì hệ thống trả lời theo bản mới ngay, không cần huấn luyện lại. Chi phí thấp hơn một bậc và rủi ro kỹ thuật thấp hơn nhiều.</p>
+<p><strong><span class="tok">AD-02</span> — AI không bao giờ truy cập trực tiếp cơ sở dữ liệu hoặc hệ thống nghiệp vụ</strong></p>
+<p><em>Phương án cân nhắc:</em> (a) cấp cho AI quyền sinh và chạy câu lệnh SQL trực tiếp; (b) AI chỉ được gọi các công cụ định nghĩa sẵn, mỗi công cụ là một API nghiệp vụ có kiểm soát quyền.</p>
+<p><em>Lựa chọn:</em> phương án (b), không có ngoại lệ.</p>
+<p><em>Lý do:</em> Mô hình ngôn ngữ sinh văn bản theo xác suất; nếu cho phép nó sinh câu lệnh chạy trực tiếp trên cơ sở dữ liệu thì mọi lỗi sinh văn bản đều có thể trở thành sự cố dữ liệu. Khi AI chỉ được gọi công cụ, mỗi công cụ là một điểm kiểm soát: xác thực tham số, kiểm tra quyền, ghi nhật ký, giới hạn phạm vi. Chi tiết ở Mục 5.3 và Mục 12.</p>
+<p><strong><span class="tok">AD-03</span> — Tri thức tình huống lưu ở dạng có cấu trúc, không chỉ ở dạng văn bản</strong></p>
+<p><em>Phương án cân nhắc:</em> (a) lưu toàn bộ lịch sử hội thoại dưới dạng văn bản rồi để RAG tìm; (b) xây riêng một mô hình dữ liệu tình huống kỹ thuật với các trường bắt buộc.</p>
+<p><em>Lựa chọn:</em> phương án (b) — trọng tâm của Mục 7.</p>
+<p><em>Lý do:</em> Một câu văn &quot;dầm này nên tăng thép lên 8D25&quot; không cho phép hệ thống lọc theo nhịp dầm, cấp bê tông hay tải trọng. Dữ liệu có cấu trúc cho phép truy vấn chính xác, kiểm tra tính hợp lệ, thống kê, và về lâu dài là phân tích xu hướng thiết kế. Đây chính là khác biệt giữa một chatbot và một tài sản tri thức của doanh nghiệp.</p>
+<p><strong><span class="tok">AD-04</span> — Con người phê duyệt là bước bắt buộc trong luồng, không phải tuỳ chọn</strong></p>
+<p><em>Phương án cân nhắc:</em> (a) AI đề xuất, kỹ sư tuỳ ý xem hoặc bỏ qua; (b) mọi kết quả đưa vào hồ sơ đều phải qua thao tác phê duyệt có ghi nhận danh tính và thời điểm.</p>
+<p><em>Lựa chọn:</em> phương án (b).</p>
+<p><em>Lý do:</em> Trách nhiệm kỹ thuật thuộc về kỹ sư ký hồ sơ, không thuộc về phần mềm. Hệ thống phải phản ánh đúng thực tế đó. Ngoài ra, chính thao tác phê duyệt là nguồn dữ liệu quý nhất: nó cho biết đề xuất nào đúng, đề xuất nào bị bác, và vì sao.</p>
+<p><strong><span class="tok">AD-05</span> — MCP là tầng tích hợp, không chứa logic nghiệp vụ</strong></p>
+<p><em>Phương án cân nhắc:</em> (a) viết logic tính toán ngay trong MCP server cho nhanh; (b) MCP server chỉ thực hiện chức năng chuyển đổi giao thức, gọi xuống tầng dịch vụ nghiệp vụ dùng chung.</p>
+<p><em>Lựa chọn:</em> phương án (b).</p>
+<p><em>Lý do:</em> Nếu logic nằm trong MCP server, đơn vị sẽ có hai bản logic tính toán khác nhau — một cho ứng dụng web, một cho MCP — và theo thời gian chúng sẽ lệch nhau. Khi đó cùng một bài toán cho hai kết quả, là tình huống không chấp nhận được trong hồ sơ kỹ thuật. Chi tiết ở Mục 11.</p>
+<p><strong><span class="tok">AD-06</span> — Xây dựng theo giai đoạn có giá trị độc lập, không xây trọn gói một lần</strong></p>
+<p><em>Phương án cân nhắc:</em> (a) triển khai toàn bộ tính năng trong một dự án 12 tháng; (b) bốn giai đoạn, mỗi giai đoạn tự nó đã mang lại giá trị sử dụng được.</p>
+<p><em>Lựa chọn:</em> phương án (b).</p>
+<p><em>Lý do:</em> Giai đoạn 1 — hỏi đáp tài liệu — đưa vào sử dụng được sau khoảng 3 tháng và tự nó đã tiết kiệm thời gian tra cứu. Nếu giai đoạn 1 không được kỹ sư sử dụng, đơn vị dừng lại với thiệt hại nhỏ, thay vì phát hiện điều đó sau 12 tháng đầu tư.</p>
+<p><strong><span class="tok">AD-07</span> — PostgreSQL kèm pgvector cho giai đoạn đầu, tách vector store chuyên dụng khi cần</strong></p>
+<p><em>Phương án cân nhắc:</em> (a) dùng ngay OpenSearch hoặc một vector database chuyên dụng; (b) bắt đầu với pgvector trên PostgreSQL, chuyển đổi khi vượt ngưỡng đã định nghĩa.</p>
+<p><em>Lựa chọn:</em> phương án (b), với điểm chuyển đổi nêu rõ ở Mục 10.</p>
+<p><em>Lý do:</em> Ở quy mô vài trăm nghìn đoạn văn bản, pgvector cho hiệu năng đủ tốt, và chỉ phải vận hành một hệ quản trị dữ liệu duy nhất. Thêm một hệ thống lưu trữ thứ hai khi chưa cần là chi phí vận hành không có lợi ích tương ứng.</p>
+<p><strong><span class="tok">AD-08</span> — Ưu tiên độ tin cậy hơn độ bao phủ trong toàn bộ thiết kế</strong></p>
+<p><em>Phương án cân nhắc:</em> (a) hệ thống luôn cố trả lời mọi câu hỏi; (b) hệ thống được phép trả lời &quot;không tìm thấy căn cứ trong tài liệu nội bộ&quot;.</p>
+<p><em>Lựa chọn:</em> phương án (b).</p>
+<p><em>Lý do:</em> Một hệ thống trả lời sai một lần trong mười lần sẽ bị kỹ sư ngừng dùng vĩnh viễn, vì chi phí kiểm tra lại lớn hơn chi phí tự tra cứu. Ngược lại, một hệ thống báo rõ trạng thái không đủ căn cứ vẫn duy trì được độ tin cậy và vẫn mang lại hiệu quả ở các trường hợp còn lại.</p>
+<hr>
+<h2 id="1-tóm-tắt-dành-cho-lãnh-đạo"><span class="secnum">1</span><span class="sectext">Tóm tắt dành cho lãnh đạo</span></h2>
+<h3 id="11-vấn-đề-đang-tồn-tại"><span class="secnum">1.1</span><span class="sectext">Vấn đề đang tồn tại</span></h3>
+<p>Tài sản lớn nhất của một đơn vị tư vấn thiết kế không nằm ở phần mềm hay thiết bị, mà nằm ở <strong>kinh nghiệm kỹ thuật tích luỹ qua các dự án đã làm</strong>. Một kỹ sư mười năm kinh nghiệm biết rằng với nhịp dầm 7,2 m và tải sàn thông thường, tiết diện 300×600 mm là hợp lý; biết rằng cách bố trí cốt thép nào từng bị tư vấn thẩm tra bác bỏ; biết dự án nào đã gặp bài toán tương tự và giải quyết ra sao. Toàn bộ tri thức đó hiện nằm trong đầu từng cá nhân, hoặc nằm rải rác trong các thư mục hồ sơ mà chỉ người trực tiếp làm mới biết đường tìm.</p>
+<p>Hệ quả có thể quan sát được trong vận hành hằng ngày:</p>
+<ul><li>Kỹ sư mất thời gian đáng kể chỉ để <strong>tìm lại</strong> một tài liệu, một bảng tính, hoặc một quyết định đã có sẵn trong đơn vị.</li><li>Cùng một bài toán được tính lại nhiều lần ở nhiều dự án, bởi nhiều người khác nhau, và không ai biết rằng nó đã từng được giải.</li><li>Kết quả thiết kế <strong>thiếu nhất quán</strong> giữa các nhóm: cùng một điều kiện đầu vào nhưng hai nhóm cho hai phương án khác nhau, do dựa trên kinh nghiệm cá nhân khác nhau.</li><li>Kỹ sư mới cần thời gian dài để đạt năng suất, vì quá trình học chủ yếu diễn ra qua hỏi trực tiếp người có kinh nghiệm — vốn là nguồn lực khan hiếm nhất của đơn vị.</li><li>Khi một kỹ sư giỏi nghỉ việc, <strong>phần tri thức đi theo người đó không được ghi lại ở đâu cả</strong>.</li></ul>
+<p>Đây không phải vấn đề về năng lực con người hay kỷ luật làm việc. Đây là vấn đề về <strong>hạ tầng tri thức</strong>: đơn vị chưa có nơi nào để tri thức kỹ thuật được lưu lại ở dạng có thể tìm kiếm, tái sử dụng và kiểm chứng.</p>
+<h3 id="12-giải-pháp-đề-xuất"><span class="secnum">1.2</span><span class="sectext">Giải pháp đề xuất</span></h3>
+<p>Đề xuất xây dựng một hệ thống <strong>AI Engineering Assistant</strong> — trợ lý kỹ thuật nội bộ — hoạt động như một đồng nghiệp có trí nhớ tuyệt đối về toàn bộ tài liệu và lịch sử dự án của công ty, nhưng <strong>luôn đưa ra dẫn chứng và luôn cần kỹ sư phê duyệt</strong>.</p>
+<p>Hệ thống được xây dựng trên bốn công nghệ nền:</p>
+<div class="tablewrap"><table><thead><tr><th>Công nghệ</th><th>Vai trò trong hệ thống</th><th>Nói theo ngôn ngữ nghiệp vụ</th></tr></thead><tbody><tr><td><strong>Mô hình ngôn ngữ lớn (Large Language Model - LLM)</strong></td><td>Đọc hiểu câu hỏi tự nhiên và diễn đạt câu trả lời</td><td>Cho phép kỹ sư hỏi bằng tiếng Việt thông thường, không cần học cú pháp tra cứu</td></tr><tr><td><strong>Truy xuất tăng cường sinh nội dung (Retrieval Augmented Generation - RAG)</strong></td><td>Bắt buộc hệ thống tra cứu tài liệu nội bộ trước khi trả lời</td><td>Câu trả lời dựa trên tài liệu của đơn vị, kèm trích dẫn nguồn</td></tr><tr><td><strong>Cơ chế gọi công cụ (Tool Calling)</strong></td><td>Cho phép hệ thống gọi các công cụ tính toán, kiểm định</td><td>AI không &quot;đoán&quot; số liệu — nó chạy đúng công cụ mà kỹ sư vẫn dùng</td></tr><tr><td><strong>Giao thức kết nối công cụ AI (Model Context Protocol - MCP)</strong></td><td>Chuẩn hoá bộ công cụ để nhiều hệ thống AI cùng sử dụng</td><td>Đầu tư một lần, dùng lại cho các trợ lý AI khác trong tương lai</td></tr></tbody></table></div>
+<p>Trên nền đó, hệ thống có ba tầng năng lực, xây dựng tuần tự:</p>
+<ol><li><strong>Tầng tri thức tài liệu</strong> — trả lời câu hỏi dựa trên tiêu chuẩn, quy trình, sổ tay kỹ thuật và hồ sơ dự án cũ.</li><li><strong>Tầng tri thức kinh nghiệm</strong> — lưu lại các tình huống kỹ thuật đã xử lý dưới dạng có cấu trúc, để hệ thống có thể tìm ra tình huống tương tự đã được duyệt.</li><li><strong>Tầng thực thi kỹ thuật</strong> — gọi công cụ tính toán để kiểm chứng phương án trước khi đề xuất, thay vì chỉ dựa vào văn bản.</li></ol>
+<p>Ví dụ minh hoạ toàn bộ ba tầng cùng làm việc:</p>
+<blockquote class="scenario"><p><strong>Kỹ sư hỏi:</strong> &quot;Dầm B12 không đạt kiểm tra ứng suất. Cần tăng cốt thép bao nhiêu?&quot;</p><p><strong>Hệ thống trả lời:</strong> - Tra được 4 tình huống tương tự trong lịch sử đơn vị (nhịp 7,0–7,5 m, bê tông B25, tải trọng cùng nhóm), trong đó 3 tình huống đã được phê duyệt. - Chạy công cụ kiểm tra khả năng chịu uốn với phương án tăng thép, kết quả <strong>ĐẠT</strong>. - <strong>Hiện trạng:</strong> 6D20 · <strong>Đề xuất:</strong> 8D25 · <strong>Hệ số an toàn sau thay đổi:</strong> 1,18. - <strong>Căn cứ:</strong> Dự án X, cấu kiện B07 (duyệt ngày 12/03/2025); tiêu chuẩn TCVN 5574:2018, Điều 8.1; kết quả kiểm định tự động đính kèm. - <strong>Trạng thái:</strong> <em>Chờ kỹ sư phê duyệt.</em></p></blockquote>
+<p>Điểm mấu chốt: hệ thống <strong>không quyết định thay kỹ sư</strong>. Nó rút ngắn quãng đường từ câu hỏi đến phương án có căn cứ, còn quyết định và trách nhiệm vẫn thuộc về con người ký hồ sơ.</p>
+<h3 id="13-giá-trị-kinh-doanh-dự-kiến"><span class="secnum">1.3</span><span class="sectext">Giá trị kinh doanh dự kiến</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Nhóm giá trị</th><th>Nội dung</th><th>Cách đo lường</th></tr></thead><tbody><tr><td><strong>Giảm thời gian tra cứu</strong></td><td>Kỹ sư tìm được tài liệu và tiền lệ trong vài chục giây thay vì vài chục phút</td><td>Thời gian trung bình từ lúc đặt câu hỏi đến lúc có căn cứ sử dụng được</td></tr><tr><td><strong>Tái sử dụng kinh nghiệm</strong></td><td>Phương án đã được duyệt trở thành tài sản dùng lại, không phải tính lại từ đầu</td><td>Tỉ lệ câu hỏi được giải quyết bằng tình huống có sẵn</td></tr><tr><td><strong>Tăng tính nhất quán thiết kế</strong></td><td>Các nhóm cùng tham chiếu một nguồn tiền lệ và một bộ công cụ tính toán</td><td>Độ phân tán của phương án cho cùng nhóm điều kiện đầu vào</td></tr><tr><td><strong>Rút ngắn thời gian đào tạo</strong></td><td>Kỹ sư mới tự tra được tiền lệ kèm giải thích, giảm phụ thuộc vào việc hỏi người có kinh nghiệm</td><td>Thời gian để kỹ sư mới xử lý độc lập một hạng mục tiêu chuẩn</td></tr><tr><td><strong>Giữ lại tri thức của đơn vị</strong></td><td>Quyết định kỹ thuật được ghi nhận có cấu trúc, không mất khi nhân sự thay đổi</td><td>Số tình huống kỹ thuật được ghi nhận và phê duyệt mỗi tháng</td></tr><tr><td><strong>Nâng chất lượng hồ sơ</strong></td><td>Mỗi đề xuất đều kèm dẫn chứng và kết quả kiểm định, thuận lợi khi giải trình với thẩm tra</td><td>Tỉ lệ ý kiến thẩm tra liên quan đến thiếu căn cứ</td></tr></tbody></table></div>
+<p>Cần lưu ý để bảo đảm tính khả thi của cam kết: <strong>các chỉ số trên chưa thể định lượng ở thời điểm này</strong>, vì đơn vị chưa có số liệu nền (baseline) về thời gian tra cứu hiện tại. Việc đầu tiên của giai đoạn 1 là đo baseline đó. Mọi tuyên bố kiểu &quot;giảm 40% thời gian&quot; khi chưa đo là tuyên bố tiếp thị, không phải phân tích kỹ thuật.</p>
+<h3 id="14-đề-xuất-trình-lãnh-đạo"><span class="secnum">1.4</span><span class="sectext">Đề xuất trình lãnh đạo</span></h3>
+<p>Phê duyệt chủ trương triển khai theo <strong>bốn giai đoạn</strong>, mỗi giai đoạn có tiêu chí kết thúc rõ ràng và có thể dừng lại nếu không đạt:</p>
+<div class="tablewrap"><table><thead><tr><th>Giai đoạn</th><th>Thời lượng</th><th>Nội dung chính</th><th>Tiêu chí kết thúc</th></tr></thead><tbody><tr><td><strong>GĐ 1</strong></td><td>3 tháng</td><td>Hỏi đáp tài liệu nội bộ có dẫn chứng</td><td>Có ít nhất 20 kỹ sư dùng thường xuyên; tỉ lệ câu trả lời có dẫn chứng đúng đạt ngưỡng đã thống nhất</td></tr><tr><td><strong>GĐ 2</strong></td><td>3–4 tháng</td><td>Tích hợp công cụ tính toán qua Tool Calling</td><td>Ít nhất 3 công cụ tính toán chạy được từ trợ lý, có nhật ký đầy đủ</td></tr><tr><td><strong>GĐ 3</strong></td><td>4–5 tháng</td><td>Hệ thống tri thức tình huống kỹ thuật</td><td>Có tối thiểu 300 tình huống đã được phê duyệt trong kho</td></tr><tr><td><strong>GĐ 4</strong></td><td>3 tháng</td><td>Hệ sinh thái MCP và mở rộng</td><td>Bộ công cụ dùng lại được bởi ít nhất 2 ứng dụng AI khác nhau</td></tr></tbody></table></div>
+<p>Quyết định cần từ lãnh đạo ở thời điểm này chỉ gồm ba nội dung: (1) phê duyệt chủ trương và ngân sách giai đoạn 1; (2) chỉ định một Trưởng phòng Kỹ thuật làm chủ sở hữu nghiệp vụ của hệ thống; (3) cho phép bộ phận kỹ thuật dành thời gian rà soát và bàn giao tập tài liệu ban đầu.</p>
+<hr>
+<h2 id="2-hiện-trạng-vấn-đề-và-cơ-hội"><span class="secnum">2</span><span class="sectext">Hiện trạng, vấn đề và cơ hội</span></h2>
+<h3 id="21-cách-tri-thức-kỹ-thuật-đang-lưu-chuyển-trong-đơn-vị"><span class="secnum">2.1</span><span class="sectext">Cách tri thức kỹ thuật đang lưu chuyển trong đơn vị</span></h3>
+<p>Trước khi bàn giải pháp, cần mô tả chính xác dòng chảy tri thức hiện tại. Trong một đơn vị tư vấn thiết kế điển hình, tri thức kỹ thuật tồn tại ở bốn dạng, với mức độ tiếp cận rất khác nhau:</p>
+<figure class="diagram"><div class="diagram-scroll"><pre class="mermaid">flowchart TD
+    A[&quot;Tri thức chuẩn tắc: TCVN, ACI, Eurocode, sổ tay&quot;] --&gt; E[&quot;Kỹ sư đang thiết kế&quot;]
+    B[&quot;Tri thức quy trình: quy định nội bộ, checklist, mẫu hồ sơ&quot;] --&gt; E
+    C[&quot;Tri thức dự án: hồ sơ tính toán, bản vẽ, biên bản thẩm tra&quot;] --&gt; E
+    D[&quot;Tri thức ngầm: kinh nghiệm cá nhân chưa ghi lại&quot;] --&gt; E
+    E --&gt; F[&quot;Phương án thiết kế&quot;]
+    F --&gt; G[&quot;Hồ sơ nộp thẩm tra&quot;]
+    G -.-&gt;|&quot;Không quay lại kho tri thức&quot;| C</pre></div><figcaption>Sơ đồ 1</figcaption></figure>
+<p>Vấn đề nằm ở đường nét đứt trong sơ đồ: <strong>kết quả của một dự án hầu như không quay ngược lại làm giàu kho tri thức của đơn vị</strong>. Hồ sơ được lưu vào thư mục dự án và dừng ở đó. Không ai gán nhãn &quot;bài toán này là bài toán gì&quot;, &quot;phương án chọn là gì&quot;, &quot;vì sao chọn&quot;. Vì vậy dự án thứ hai mươi vẫn phải giải lại bài toán mà dự án thứ ba đã giải xong.</p>
+<h3 id="22-các-vấn-đề-cụ-thể"><span class="secnum">2.2</span><span class="sectext">Các vấn đề cụ thể</span></h3>
+<p><strong>Vấn đề 1 — Tri thức phân tán, không có điểm truy cập duy nhất</strong></p>
+<p>Tài liệu nằm trên file server theo cây thư mục dự án, một phần nằm trong email trao đổi, một phần trên máy cá nhân, một phần trong các nhóm chat. Công cụ tìm kiếm của hệ điều hành chỉ tìm theo tên file, không tìm theo nội dung, và hoàn toàn không tìm được theo <strong>ý nghĩa</strong> của câu hỏi. Một kỹ sư muốn biết &quot;đơn vị đã từng xử lý móng trên nền đất yếu ở khu vực có mực nước ngầm cao như thế nào&quot; không có cách nào tìm ra ngoài việc hỏi người khác.</p>
+<p><em>Chi phí thực tế:</em> thời gian tra cứu bị tính vào giờ dự án nhưng không tạo ra giá trị mới, và kết quả tra cứu phụ thuộc vào trí nhớ của người được hỏi.</p>
+<p><strong>Vấn đề 2 — Không tra cứu được tiền lệ đã xử lý</strong></p>
+<p>Đây là vấn đề nghiêm trọng hơn vấn đề 1, và ít được nhận ra hơn. Ngay cả khi tìm được hồ sơ tính toán của một dự án cũ, kỹ sư vẫn phải tự đọc để hiểu bối cảnh: điều kiện đầu vào là gì, phương án cuối cùng là gì, có bị thẩm tra bác không, đã sửa những gì. Thông tin này nằm rải rác trong nhiều file khác nhau và thường không đầy đủ.</p>
+<p><em>Chi phí thực tế:</em> đơn vị không tận dụng được chính kinh nghiệm của mình. Mỗi dự án bắt đầu gần như từ con số không về mặt tri thức tình huống.</p>
+<p><strong>Vấn đề 3 — Tri thức của kỹ sư giàu kinh nghiệm không được tập trung hoá</strong></p>
+<p>Những người có kinh nghiệm nhất thường là những người bận nhất. Họ trở thành nút thắt cổ chai: mọi câu hỏi khó đều dồn về họ. Thời gian của họ bị tiêu vào việc trả lời lại những câu hỏi đã trả lời nhiều lần, thay vì vào những bài toán thực sự cần đến kinh nghiệm của họ.</p>
+<p><em>Chi phí thực tế:</em> năng lực khan hiếm nhất bị sử dụng sai chỗ, và rủi ro tập trung vào cá nhân rất cao — nếu người đó nghỉ, một mảng năng lực của đơn vị biến mất theo.</p>
+<p><strong>Vấn đề 4 — Tính toán lặp lại</strong></p>
+<p>Nhiều bài toán kỹ thuật có tính lặp cao: kiểm tra khả năng chịu uốn, chịu cắt, kiểm tra độ võng, tính toán neo và nối thép. Các bài toán này thường được thực hiện bằng bảng tính Excel truyền tay giữa các kỹ sư, mỗi người giữ một phiên bản riêng, và không ai chắc phiên bản nào là bản đúng nhất.</p>
+<p><em>Chi phí thực tế:</em> ngoài thời gian lãng phí, còn có rủi ro chất lượng — hai kỹ sư dùng hai phiên bản bảng tính khác nhau có thể ra hai kết quả khác nhau cho cùng một bài toán.</p>
+<p><strong>Vấn đề 5 — Onboarding kỹ sư mới chậm</strong></p>
+<p>Một kỹ sư mới ra trường cần thời gian dài để nắm được không chỉ kiến thức chuyên môn, mà cả <strong>cách làm của đơn vị</strong>: dùng mẫu hồ sơ nào, quy ước đặt tên ra sao, mức độ chi tiết đến đâu là đủ, những lỗi nào hay bị thẩm tra bắt. Toàn bộ phần này hiện được truyền đạt bằng miệng.</p>
+<p><em>Chi phí thực tế:</em> chi phí đào tạo cao, chất lượng đào tạo không đồng đều giữa các nhóm, và thời gian của người hướng dẫn bị chiếm dụng đáng kể.</p>
+<p><strong>Vấn đề 6 — Thiếu nhất quán giữa các nhóm thiết kế</strong></p>
+<p>Khi mỗi nhóm dựa vào kinh nghiệm riêng và bộ công cụ riêng, kết quả thiết kế cho cùng một loại bài toán có thể khác nhau đáng kể. Điều này gây khó khăn khi rà soát chéo, khi bàn giao giữa các nhóm, và khi khách hàng so sánh hồ sơ giữa các dự án.</p>
+<p><em>Chi phí thực tế:</em> chi phí kiểm soát chất lượng tăng, và hình ảnh chuyên nghiệp của đơn vị trước khách hàng bị ảnh hưởng.</p>
+<h3 id="23-vì-sao-đến-bây-giờ-mới-giải-được-bài-toán-này"><span class="secnum">2.3</span><span class="sectext">Vì sao đến bây giờ mới giải được bài toán này</span></h3>
+<p>Câu hỏi hợp lý từ phía lãnh đạo: bài toán quản lý tri thức không mới, vì sao các nỗ lực trước đây (xây dựng thư viện tài liệu, wiki nội bộ, quy định lưu hồ sơ) thường không thành công?</p>
+<p>Nguyên nhân là <strong>chi phí đóng góp luôn cao hơn lợi ích nhận lại đối với từng cá nhân</strong>. Để một wiki nội bộ hữu ích, kỹ sư phải bỏ công viết bài; nhưng người viết không phải là người hưởng lợi. Ngoài ra, việc tìm kiếm trong wiki vẫn dựa trên từ khoá, nên ngay cả khi nội dung đã có, người cần vẫn không tìm ra.</p>
+<p>Ba yếu tố công nghệ mới thay đổi bài toán này:</p>
+<div class="tablewrap"><table><thead><tr><th>Yếu tố</th><th>Trước đây</th><th>Hiện nay</th></tr></thead><tbody><tr><td><strong>Tìm kiếm theo ngữ nghĩa</strong></td><td>Chỉ tìm được theo từ khoá chính xác</td><td>Tìm được theo ý nghĩa câu hỏi, dù dùng từ khác</td></tr><tr><td><strong>Xử lý tài liệu không cấu trúc</strong></td><td>Phải nhập liệu thủ công vào biểu mẫu</td><td>Máy đọc trực tiếp PDF, DOCX, bảng tính</td></tr><tr><td><strong>Chi phí đóng góp tri thức</strong></td><td>Phải viết bài riêng</td><td>Ghi nhận ngay trong luồng làm việc, mất dưới 2 phút</td></tr></tbody></table></div>
+<p>Yếu tố quyết định là khả năng <strong>thu thập tri thức như một sản phẩm phụ của công việc thường ngày</strong>, thay vì như một nhiệm vụ bổ sung nằm ngoài quy trình. Đây là điều kiện mà các nỗ lực trước đây không đáp ứng được.</p>
+<h3 id="24-cơ-hội-trợ-lý-tri-thức-kỹ-thuật-số"><span class="secnum">2.4</span><span class="sectext">Cơ hội — &quot;Trợ lý tri thức kỹ thuật số&quot;</span></h3>
+<p>Cơ hội của đơn vị không đơn thuần là &quot;dùng AI cho hiện đại&quot;. Cơ hội là biến khối tài liệu và hồ sơ đang nằm im thành một <strong>tài sản vận hành được</strong>.</p>
+<p>Ở trạng thái hoàn chỉnh, hệ thống khai thác đồng thời ba nhóm nguồn dữ liệu:</p>
+<figure class="diagram"><div class="diagram-scroll"><pre class="mermaid">flowchart LR
+    A[&quot;Tai lieu noi bo: tieu chuan, quy trinh, so tay&quot;] --&gt; D[&quot;Trợ lý tri thức kỹ thuật số&quot;]
+    B[&quot;Tình huống lịch sử: bài toán, đầu vào, phương án, phê duyệt&quot;] --&gt; D
+    C[&quot;Hệ thống tính toán: công cụ kiểm tra, mô phỏng, truy vấn&quot;] --&gt; D
+    D --&gt; E[&quot;Kỹ sư: nhận đề xuất kèm dẫn chứng&quot;]
+    E --&gt; F[&quot;Kỹ sư phê duyệt hoặc bác bỏ&quot;]
+    F --&gt; B</pre></div><figcaption>Sơ đồ 2</figcaption></figure>
+<p>Điểm quan trọng nhất của sơ đồ là <strong>vòng lặp khép kín ở dưới cùng</strong>: mỗi lần kỹ sư phê duyệt hay bác bỏ một đề xuất, dữ liệu đó quay trở lại kho tình huống. Hệ thống càng dùng càng giàu tri thức, và tri thức đó thuộc về đơn vị, không thuộc về nhà cung cấp công nghệ nào.</p>
+<p>Đây chính là điểm khác biệt giữa việc mua một công cụ AI thương mại và việc xây dựng một hệ thống nội bộ: công cụ thương mại không biết gì về hồ sơ của đơn vị và không tích luỹ được gì cho đơn vị. Hệ thống nội bộ tích luỹ một tài sản dữ liệu mà đối thủ không có.</p>
+<h3 id="25-những-gì-hệ-thống-này-không-giải-quyết"><span class="secnum">2.5</span><span class="sectext">Những gì hệ thống này không giải quyết</span></h3>
+<p>Để đề xuất trung thực, cần nêu rõ giới hạn:</p>
+<ul><li>Hệ thống <strong>không thay thế phần mềm phân tích kết cấu</strong>. Nó gọi các phần mềm đó, không tính thay chúng.</li><li>Hệ thống <strong>không tự thiết kế</strong> một công trình. Nó hỗ trợ ở mức từng bài toán cấu kiện và từng quyết định kỹ thuật cụ thể.</li><li>Hệ thống <strong>không thay thế quy trình kiểm soát chất lượng</strong> hiện có. Nó bổ sung dữ liệu cho quy trình đó.</li><li>Hệ thống <strong>không cải thiện chất lượng tài liệu đầu vào</strong>. Nếu tài liệu nội bộ mâu thuẫn hoặc lỗi thời, hệ thống sẽ phản ánh đúng sự mâu thuẫn đó. Việc rà soát tài liệu là công việc của con người và phải làm trước.</li></ul>
+<hr>
+<h2 id="3-tổng-quan-giải-pháp-đề-xuất"><span class="secnum">3</span><span class="sectext">Tổng quan giải pháp đề xuất</span></h2>
+<h3 id="31-khái-niệm-hệ-thống"><span class="secnum">3.1</span><span class="sectext">Khái niệm hệ thống</span></h3>
+<p><strong>AI Engineering Assistant</strong> là một ứng dụng nội bộ, truy cập qua trình duyệt, nơi kỹ sư đặt câu hỏi bằng ngôn ngữ tự nhiên và nhận về câu trả lời kèm ba thứ luôn đi cùng nhau:</p>
+<ol><li><strong>Nội dung trả lời</strong> — diễn đạt ngắn gọn, đúng ngôn ngữ chuyên môn của ngành.</li><li><strong>Dẫn chứng</strong> — trích dẫn cụ thể tới tài liệu, trang, điều khoản, hoặc tình huống lịch sử.</li><li><strong>Kết quả kiểm định</strong> — nếu câu hỏi liên quan đến tính toán, hệ thống chạy công cụ và đính kèm kết quả cùng tham số đầu vào đã dùng.</li></ol>
+<p>Nguyên tắc nền tảng, áp dụng xuyên suốt mọi thành phần: <strong>AI là trợ lý hỗ trợ kỹ sư, không thay thế kỹ sư.</strong> Hệ thống chuẩn bị vật liệu cho quyết định; con người ra quyết định và chịu trách nhiệm về quyết định đó.</p>
+<h3 id="32-ba-tầng-năng-lực"><span class="secnum">3.2</span><span class="sectext">Ba tầng năng lực</span></h3>
+<p>Hệ thống được cấu trúc thành ba tầng năng lực chồng lên nhau. Mỗi tầng có giá trị riêng và có thể triển khai độc lập, nhưng giá trị tăng theo cấp số nhân khi cả ba cùng hoạt động.</p>
+<figure class="diagram"><div class="diagram-scroll"><pre class="mermaid">flowchart TD
+    subgraph L3[&quot;Tầng 3 — Năng lực thực thi kỹ thuật&quot;]
+        T1[&quot;Công cụ tính toán&quot;]
+        T2[&quot;Công cụ kiểm định&quot;]
+        T3[&quot;Truy vấn hệ thống nội bộ&quot;]
+    end
+    subgraph L2[&quot;Tầng 2 — Năng lực kinh nghiệm kỹ thuật&quot;]
+        C1[&quot;Kho tình huống đã xử lý&quot;]
+        C2[&quot;Tìm tình huống tương tự&quot;]
+        C3[&quot;Trạng thái phê duyệt&quot;]
+    end
+    subgraph L1[&quot;Tầng 1 — Năng lực tri thức tài liệu&quot;]
+        R1[&quot;Tiêu chuẩn và quy chuẩn&quot;]
+        R2[&quot;Quy trình nội bộ&quot;]
+        R3[&quot;Hồ sơ dự án cũ&quot;]
+    end
+    L1 --&gt; AG[&quot;Agent điều phối&quot;]
+    L2 --&gt; AG
+    L3 --&gt; AG
+    AG --&gt; U[&quot;Kỹ sư&quot;]</pre></div><figcaption>Sơ đồ 3</figcaption></figure>
+<h4 id="tầng-1-năng-lực-tri-thức-tài-liệu-rag"><span class="sectext">Tầng 1 — Năng lực tri thức tài liệu (RAG)</span></h4>
+<p><strong>Mục đích:</strong> trả lời các câu hỏi có đáp án nằm sẵn trong tài liệu nội bộ.</p>
+<p><strong>Cơ sở đề xuất:</strong> đây là nhóm câu hỏi chiếm tỉ trọng lớn nhất trong công việc hằng ngày — tra điều khoản tiêu chuẩn, tra quy định nội bộ, tra thông số vật liệu, tra cách trình bày hồ sơ. Hiện tại nhóm câu hỏi này tốn nhiều thời gian nhất mà lại tạo ra ít giá trị trí tuệ nhất.</p>
+<p><strong>Chức năng chính:</strong> truy xuất và tổng hợp nội dung từ kho tài liệu nội bộ, kèm thông tin nguồn phục vụ kiểm chứng.</p>
+<p><strong>Luồng hoạt động:</strong> tài liệu được xử lý trước, cắt thành đoạn, chuyển thành embedding và lưu vào vector database. Khi có câu hỏi, hệ thống tìm các đoạn liên quan nhất, đưa chúng vào ngữ cảnh cùng câu hỏi, rồi yêu cầu LLM trả lời <strong>chỉ dựa trên các đoạn đó</strong>. Chi tiết ở Mục 6.</p>
+<p><strong>Giá trị mang lại:</strong> giảm thời gian tra cứu; giảm phụ thuộc vào việc hỏi đồng nghiệp; đảm bảo mọi người tra cùng một phiên bản tài liệu.</p>
+<p><strong>Ví dụ nhóm câu hỏi thuộc tầng này:</strong></p>
+<ul><li>&quot;Theo quy định nội bộ, chiều dày lớp bê tông bảo vệ cho dầm trong môi trường ven biển là bao nhiêu?&quot;</li><li>&quot;Mẫu thuyết minh tính toán kết cấu của đơn vị gồm những mục nào?&quot;</li><li>&quot;TCVN 5574 quy định hàm lượng cốt thép tối thiểu cho dầm chịu uốn ra sao?&quot;</li></ul>
+<h4 id="tầng-2-năng-lực-kinh-nghiệm-kỹ-thuật-historical-case-database"><span class="sectext">Tầng 2 — Năng lực kinh nghiệm kỹ thuật (Historical Case Database)</span></h4>
+<p><strong>Mục đích:</strong> trả lời các câu hỏi mà đáp án <strong>không nằm trong tài liệu nào</strong>, mà nằm trong kinh nghiệm xử lý của đơn vị.</p>
+<p><strong>Cơ sở đề xuất:</strong> tiêu chuẩn cho biết giới hạn được phép, nhưng không cho biết <strong>đơn vị thường chọn phương án nào trong giới hạn đó</strong>. Khoảng cách giữa &quot;được phép&quot; và &quot;nên làm&quot; chính là kinh nghiệm — và đó là phần tài liệu không bao giờ ghi lại.</p>
+<p><strong>Chức năng chính:</strong> ghi nhận, chuẩn hoá và tra cứu lại các tình huống kỹ thuật đã được phê duyệt trong đơn vị.</p>
+<p><strong>Luồng hoạt động:</strong> mỗi lần một bài toán kỹ thuật được xử lý và phê duyệt, hệ thống lưu lại một bản ghi có cấu trúc gồm: mô tả bài toán, tham số đầu vào, kết quả tính toán, phương án trước và sau, kết quả kiểm định, người phê duyệt và thời điểm. Khi có câu hỏi mới, hệ thống tìm các bản ghi có điều kiện đầu vào tương tự. Chi tiết ở Mục 7.</p>
+<p><strong>Giá trị mang lại:</strong> biến kinh nghiệm cá nhân thành tài sản đơn vị; giảm rủi ro mất tri thức khi nhân sự thay đổi; tăng tính nhất quán giữa các nhóm.</p>
+<p><strong>Ví dụ nhóm câu hỏi thuộc tầng này:</strong></p>
+<ul><li>&quot;Đơn vị đã từng xử lý dầm nhịp lớn không đạt độ võng như thế nào?&quot;</li><li>&quot;Với móng trên nền đất yếu, các dự án trước chọn giải pháp gì và kết quả ra sao?&quot;</li><li>&quot;Phương án nào từng bị đơn vị thẩm tra bác bỏ, vì lý do gì?&quot;</li></ul>
+<h4 id="tầng-3-năng-lực-thực-thi-kỹ-thuật-tool-calling"><span class="sectext">Tầng 3 — Năng lực thực thi kỹ thuật (Tool Calling)</span></h4>
+<p><strong>Mục đích:</strong> để hệ thống <strong>tính toán thật</strong>, thay vì mô tả bằng lời cách tính.</p>
+<p><strong>Cơ sở đề xuất:</strong> đây là ranh giới an toàn quan trọng nhất. LLM không đáng tin khi làm số học, và một con số sai trong hồ sơ kỹ thuật có hậu quả nghiêm trọng. Giải pháp không phải là &quot;làm cho AI giỏi toán hơn&quot;, mà là <strong>không để AI tự tính</strong>: mọi con số phải do một công cụ tính toán đã được kiểm chứng sinh ra.</p>
+<p><strong>Chức năng chính:</strong> thực hiện các phép tính và kiểm định kỹ thuật thông qua công cụ đã được chuẩn hoá và kiểm chứng.</p>
+<p><strong>Luồng hoạt động:</strong> các công cụ tính toán được đóng gói thành API có mô tả rõ tham số vào, tham số ra. Agent chọn công cụ phù hợp, điền tham số, gọi, rồi diễn giải kết quả trả về. Toàn bộ lời gọi được ghi nhật ký. Chi tiết ở Mục 5.</p>
+<p><strong>Giá trị mang lại:</strong> kết quả có thể tái lập và kiểm tra được; chuẩn hoá bộ công cụ tính toán trong toàn đơn vị; loại bỏ tình trạng mỗi người một phiên bản bảng tính.</p>
+<p><strong>Ví dụ nhóm câu hỏi thuộc tầng này:</strong></p>
+<ul><li>&quot;Kiểm tra khả năng chịu uốn của dầm 300×600, bê tông B25, thép CB400-V, cốt thép 6D20.&quot;</li><li>&quot;Với dầm này, cần bao nhiêu thép để hệ số an toàn đạt tối thiểu 1,15?&quot;</li><li>&quot;Tra trong hệ thống: dự án nào đang dùng cấp bê tông B30 trở lên?&quot;</li></ul>
+<h3 id="33-ba-tầng-phối-hợp-trong-một-câu-hỏi-thực-tế"><span class="secnum">3.3</span><span class="sectext">Ba tầng phối hợp trong một câu hỏi thực tế</span></h3>
+<p>Hiệu quả của phương án thể hiện rõ nhất khi cả ba tầng cùng tham gia xử lý một yêu cầu. Bảng dưới đây phân tách các bước xử lý đối với ví dụ đã nêu tại Mục 1:</p>
+<div class="tablewrap"><table><thead><tr><th>Bước</th><th>Tầng tham gia</th><th>Hệ thống làm gì</th><th>Kết quả trung gian</th></tr></thead><tbody><tr><td>1</td><td>—</td><td>Hiểu câu hỏi, xác định đây là bài toán tăng cốt thép cho dầm chịu uốn</td><td>Nhận diện loại bài toán và cấu kiện</td></tr><tr><td>2</td><td>Tầng 3</td><td>Gọi công cụ truy vấn thông số cấu kiện B12 từ hệ thống dự án</td><td>Tiết diện 300×600, B25, 6D20, M = 285 kNm</td></tr><tr><td>3</td><td>Tầng 1</td><td>Truy xuất điều khoản tiêu chuẩn về hàm lượng cốt thép tối đa</td><td>TCVN 5574:2018, Điều 8.1</td></tr><tr><td>4</td><td>Tầng 2</td><td>Tìm tình huống tương tự đã phê duyệt</td><td>4 tình huống, 3 đã duyệt</td></tr><tr><td>5</td><td>Tầng 3</td><td>Gọi công cụ kiểm tra khả năng chịu uốn với phương án 8D25</td><td>Đạt, hệ số 1,18</td></tr><tr><td>6</td><td>—</td><td>Tổng hợp thành đề xuất kèm dẫn chứng</td><td>Đề xuất trình kỹ sư</td></tr><tr><td>7</td><td>—</td><td>Chờ kỹ sư phê duyệt; ghi nhận kết quả phê duyệt vào tầng 2</td><td>Bản ghi tình huống mới</td></tr></tbody></table></div>
+<p>Bước 7 là bước thường bị bỏ qua trong các hệ thống AI thông thường, và cũng là bước tạo ra giá trị dài hạn lớn nhất: nó khiến hệ thống <strong>học từ chính công việc của đơn vị</strong>.</p>
+<h3 id="34-nguyên-tắc-thiết-kế-xuyên-suốt"><span class="secnum">3.4</span><span class="sectext">Nguyên tắc thiết kế xuyên suốt</span></h3>
+<p>Năm nguyên tắc dưới đây ràng buộc mọi lựa chọn kỹ thuật trong các mục tiếp theo:</p>
+<div class="tablewrap"><table><thead><tr><th>Nguyên tắc</th><th>Diễn giải</th><th>Thể hiện trong kiến trúc</th></tr></thead><tbody><tr><td><strong>Minh bạch</strong></td><td>Người dùng luôn thấy được câu trả lời dựa trên căn cứ nào</td><td>Mọi câu trả lời có panel dẫn chứng, không ẩn nguồn</td></tr><tr><td><strong>Truy vết được</strong></td><td>Mọi lời gọi công cụ, mọi truy xuất tài liệu đều được ghi lại</td><td>Ba loại nhật ký ở Mục 8</td></tr><tr><td><strong>Con người kiểm soát</strong></td><td>Kỹ sư có thể sửa tham số, chạy lại, bác bỏ đề xuất</td><td>Bước phê duyệt bắt buộc; tham số hiển thị và sửa được</td></tr><tr><td><strong>Không tự tính</strong></td><td>AI không sinh ra con số kỹ thuật từ suy đoán</td><td>Mọi số liệu đến từ công cụ hoặc từ tài liệu có trích dẫn</td></tr><tr><td><strong>Ưu tiên độ tin cậy</strong></td><td>Hệ thống được phép trả lời không đủ căn cứ thay vì suy đoán</td><td>Ngưỡng độ tin cậy trong truy xuất; phản hồi rõ khi không đủ dữ liệu</td></tr></tbody></table></div>
+<hr>
+<h2 id="4-kiến-trúc-hệ-thống-tổng-thể"><span class="secnum">4</span><span class="sectext">Kiến trúc hệ thống tổng thể</span></h2>
+<h3 id="41-sơ-đồ-kiến-trúc-mức-cao"><span class="secnum">4.1</span><span class="sectext">Sơ đồ kiến trúc mức cao</span></h3>
+<figure class="diagram"><div class="diagram-scroll"><pre class="mermaid">flowchart TD
+    ENG[&quot;Kỹ sư&quot;] --&gt; WEB[&quot;Web UI: AI Engineering Workspace&quot;]
+    WEB --&gt; API[&quot;API Gateway và lớp xác thực&quot;]
+    API --&gt; AGENT[&quot;Agent Runtime&quot;]
+
+    AGENT --&gt; LLM[&quot;AWS Bedrock: Claude&quot;]
+    AGENT --&gt; RAG[&quot;RAG Service&quot;]
+    AGENT --&gt; CASE[&quot;Case Knowledge Service&quot;]
+    AGENT --&gt; TOOLS[&quot;Tool Registry và Tool Executor&quot;]
+
+    RAG --&gt; VDB[&quot;Vector Database&quot;]
+    RAG --&gt; S3[&quot;S3: tài liệu gốc&quot;]
+    CASE --&gt; PG[&quot;PostgreSQL: kho tình huống&quot;]
+
+    TOOLS --&gt; PERM[&quot;Tool Permission Layer&quot;]
+    PERM --&gt; SVC[&quot;Engineering Business Services&quot;]
+    SVC --&gt; CALC[&quot;Calculation Engine&quot;]
+    SVC --&gt; SIM[&quot;Hệ thống mô phỏng hiện có&quot;]
+    SVC --&gt; DB[&quot;Cơ sở dữ liệu dự án&quot;]
+
+    AGENT --&gt; LOG[&quot;Logging Service&quot;]
+    LOG --&gt; PG
+    MCP[&quot;MCP Server&quot;] --&gt; SVC
+    EXT[&quot;AI client bên ngoài&quot;] --&gt; MCP</pre></div><figcaption>Sơ đồ 4</figcaption></figure>
+<h3 id="42-giải-thích-từng-thành-phần"><span class="secnum">4.2</span><span class="sectext">Giải thích từng thành phần</span></h3>
+<p>Dưới đây là mô tả của từng thành phần theo bốn câu hỏi: <strong>làm gì — vì sao cần — hoạt động ra sao — giá trị nghiệp vụ</strong>.</p>
+<h4 id="421-web-ui-ai-engineering-workspace"><span class="secnum">4.2.1</span><span class="sectext">Web UI — AI Engineering Workspace</span></h4>
+<p><strong>Mục đích:</strong> một giao diện chat đơn thuần không đủ cho công việc kỹ thuật. Kỹ sư cần nhìn thấy đồng thời câu trả lời, tài liệu gốc, và bảng tham số tính toán để đối chiếu. Nếu phải chuyển qua lại giữa nhiều cửa sổ, việc kiểm chứng trở nên tốn công đến mức người dùng bỏ qua — và khi đó nguyên tắc &quot;con người kiểm soát&quot; chỉ còn trên giấy.</p>
+<p><strong>Chức năng chính:</strong> giao diện làm việc của kỹ sư, gồm ba cột: nguồn tri thức, hội thoại, và dẫn chứng.</p>
+<p><strong>Luồng hoạt động:</strong> ứng dụng một trang, giao tiếp với backend qua HTTPS; câu trả lời được truyền theo dạng streaming để người dùng thấy tiến trình xử lý thay vì chờ màn hình trắng.</p>
+<p><strong>Giá trị mang lại:</strong> quyết định tỉ lệ chấp nhận của người dùng. Chi tiết ở Mục 9.</p>
+<h4 id="422-api-gateway-và-lớp-xác-thực"><span class="secnum">4.2.2</span><span class="sectext">API Gateway và lớp xác thực</span></h4>
+<p><strong>Mục đích:</strong> hệ thống chứa dữ liệu dự án và tài liệu nội bộ. Cần biết chắc ai đang hỏi, và người đó được phép thấy dữ liệu của dự án nào. Không có lớp này thì mọi kiểm soát phía sau đều vô nghĩa.</p>
+<p><strong>Chức năng chính:</strong> điểm vào duy nhất của hệ thống; xác thực người dùng, phân quyền, giới hạn tần suất gọi, ghi nhận truy cập.</p>
+<p><strong>Luồng hoạt động:</strong> tích hợp với hệ thống danh tính hiện có của đơn vị (Active Directory hoặc tương đương) qua chuẩn OIDC; phát hành token có thời hạn ngắn; mọi lời gọi xuống Agent Runtime đều mang danh tính người dùng.</p>
+<p><strong>Giá trị mang lại:</strong> đảm bảo dữ liệu dự án không rò rỉ giữa các nhóm; đáp ứng yêu cầu bảo mật của chủ đầu tư.</p>
+<h4 id="423-agent-runtime"><span class="secnum">4.2.3</span><span class="sectext">Agent Runtime</span></h4>
+<p><strong>Mục đích:</strong> một câu hỏi kỹ thuật thường cần nhiều bước — tra tài liệu, tra tình huống, gọi công cụ tính toán — và số bước không biết trước. Nếu lập trình cứng theo luồng cố định, hệ thống chỉ xử lý được đúng những câu hỏi đã lường trước. Agent Runtime cho phép xử lý các câu hỏi chưa lường trước bằng cách quyết định bước tiếp theo dựa trên kết quả bước trước.</p>
+<p><strong>Chức năng chính:</strong> đóng vai trò lớp điều phối trung tâm. Thành phần này tiếp nhận yêu cầu, phân tích ý định, xác định trình tự xử lý, điều phối việc gọi các dịch vụ phía sau và tổng hợp kết quả thành câu trả lời kèm dẫn chứng.</p>
+<p><strong>Luồng hoạt động:</strong> vòng lặp suy luận — gọi công cụ — quan sát kết quả, có giới hạn số vòng và giới hạn thời gian. Chi tiết ở Mục 5.</p>
+<p><strong>Giá trị mang lại:</strong> cho phép hệ thống xử lý được các yêu cầu nhiều bước, thay vì chỉ đáp ứng các yêu cầu tra cứu đơn lẻ.</p>
+<h4 id="424-aws-bedrock"><span class="secnum">4.2.4</span><span class="sectext">AWS Bedrock</span></h4>
+<p><strong>Mục đích:</strong> đây là phần đơn vị không nên tự xây. Huấn luyện và vận hành một mô hình ngôn ngữ chất lượng cao đòi hỏi năng lực và chi phí vượt xa quy mô hợp lý của một đơn vị tư vấn.</p>
+<p><strong>Chức năng chính:</strong> cung cấp mô hình ngôn ngữ để hiểu câu hỏi và diễn đạt câu trả lời.</p>
+<p><strong>Luồng hoạt động:</strong> gọi qua API trong phạm vi tài khoản AWS của đơn vị; dữ liệu gửi đi không được dùng để huấn luyện mô hình; có thể chọn vùng triển khai theo yêu cầu.</p>
+<p><strong>Giá trị mang lại:</strong> sử dụng được năng lực mô hình ngôn ngữ ở mức chất lượng cao mà không phát sinh đầu tư hạ tầng; chi phí tính theo mức sử dụng thực tế, không có chi phí cố định lớn ban đầu.</p>
+<h4 id="425-rag-service"><span class="secnum">4.2.5</span><span class="sectext">RAG Service</span></h4>
+<p><strong>Mục đích:</strong> mô hình ngôn ngữ không biết gì về tài liệu nội bộ của đơn vị. RAG là cầu nối giữa năng lực ngôn ngữ chung và dữ liệu riêng của đơn vị.</p>
+<p><strong>Chức năng chính:</strong> tìm và trả về các đoạn tài liệu liên quan nhất tới câu hỏi, kèm thông tin nguồn.</p>
+<p><strong>Luồng hoạt động:</strong> chuyển câu hỏi thành embedding, tìm các đoạn gần nghĩa nhất trong vector database, kết hợp với tìm kiếm từ khoá, sắp xếp lại theo mức liên quan. Chi tiết ở Mục 6.</p>
+<p><strong>Giá trị mang lại:</strong> chuyển khối tài liệu hiện đang lưu trữ thụ động thành nguồn tri thức khai thác được trong công việc hằng ngày.</p>
+<h4 id="426-case-knowledge-service"><span class="secnum">4.2.6</span><span class="sectext">Case Knowledge Service</span></h4>
+<p><strong>Mục đích:</strong> đây là nơi tri thức kinh nghiệm của đơn vị được tích luỹ. Nếu không có thành phần này, hệ thống chỉ đọc lại được những gì đã có sẵn trong tài liệu.</p>
+<p><strong>Chức năng chính:</strong> quản lý kho tình huống kỹ thuật — ghi nhận, tìm kiếm theo điều kiện tương tự, thống kê.</p>
+<p><strong>Luồng hoạt động:</strong> kết hợp truy vấn có cấu trúc (lọc theo loại cấu kiện, khoảng nhịp, cấp bê tông) với tìm kiếm ngữ nghĩa trên phần mô tả. Chi tiết ở Mục 7.</p>
+<p><strong>Giá trị mang lại:</strong> tài sản tri thức thuộc sở hữu đơn vị, tăng giá trị theo thời gian.</p>
+<h4 id="427-tool-registry-và-tool-executor"><span class="secnum">4.2.7</span><span class="sectext">Tool Registry và Tool Executor</span></h4>
+<p><strong>Mục đích:</strong> cần một nơi duy nhất định nghĩa &quot;AI được phép làm gì&quot;. Danh mục này là ranh giới năng lực của hệ thống, và mở rộng năng lực đồng nghĩa với việc thêm công cụ vào danh mục — một thao tác có kiểm soát, có phê duyệt.</p>
+<p><strong>Chức năng chính:</strong> Tool Registry lưu danh mục các công cụ khả dụng kèm mô tả tham số; Tool Executor thực thi lời gọi và trả kết quả.</p>
+<p><strong>Luồng hoạt động:</strong> mỗi công cụ khai báo tên, mô tả, lược đồ tham số vào/ra, mức quyền yêu cầu và mức rủi ro. Tool Executor xác thực tham số theo lược đồ trước khi gọi.</p>
+<p><strong>Giá trị mang lại:</strong> kiểm soát được chính xác phạm vi hành động của AI; mở rộng dần theo mức độ tin cậy tích luỹ.</p>
+<h4 id="428-tool-permission-layer"><span class="secnum">4.2.8</span><span class="sectext">Tool Permission Layer</span></h4>
+<p><strong>Mục đích:</strong> quyền phải được kiểm tra theo <strong>người dùng cuối</strong>, không theo hệ thống AI. Nếu Agent Runtime hoạt động dưới một tài khoản có toàn quyền, người dùng có thể truy xuất dữ liệu của bất kỳ dự án nào thông qua hệ thống, kể cả các dự án không thuộc phạm vi được phân công.</p>
+<p><strong>Chức năng chính:</strong> kiểm tra người dùng hiện tại có quyền thực hiện lời gọi công cụ này trên dữ liệu này hay không.</p>
+<p><strong>Luồng hoạt động:</strong> mỗi lời gọi công cụ mang theo danh tính người dùng; lớp này đối chiếu với ma trận quyền trước khi cho phép thực thi. Chi tiết ở Mục 12.</p>
+<p><strong>Giá trị mang lại:</strong> ngăn rò rỉ dữ liệu nội bộ; đáp ứng cam kết bảo mật với chủ đầu tư.</p>
+<h4 id="429-engineering-business-services"><span class="secnum">4.2.9</span><span class="sectext">Engineering Business Services</span></h4>
+<p><strong>Mục đích:</strong> logic nghiệp vụ phải nằm ở một nơi duy nhất, được kiểm thử và kiểm soát phiên bản, và được dùng chung bởi mọi thành phần gọi tới — bao gồm cả ứng dụng web, cả AI, cả MCP.</p>
+<p><strong>Chức năng chính:</strong> tầng dịch vụ nghiệp vụ chứa toàn bộ logic kỹ thuật: tính toán, kiểm định, truy vấn dữ liệu dự án.</p>
+<p><strong>Luồng hoạt động:</strong> các dịch vụ độc lập, giao tiếp qua API nội bộ; mỗi dịch vụ có bộ kiểm thử riêng và có phiên bản rõ ràng.</p>
+<p><strong>Giá trị mang lại:</strong> đảm bảo cùng một bài toán luôn cho cùng một kết quả, bất kể được gọi từ đâu. Đây là điều kiện bắt buộc để kết quả dùng được trong hồ sơ.</p>
+<h4 id="4210-calculation-engine"><span class="secnum">4.2.10</span><span class="sectext">Calculation Engine</span></h4>
+<p><strong>Mục đích:</strong> để có một nguồn tính toán duy nhất, thay cho tình trạng nhiều phiên bản bảng tính khác nhau trôi nổi trong đơn vị.</p>
+<p><strong>Chức năng chính:</strong> thực hiện các phép tính kỹ thuật đã được chuẩn hoá và kiểm chứng.</p>
+<p><strong>Luồng hoạt động:</strong> mỗi bài toán được đóng gói thành một hàm có tham số vào rõ ràng, có bộ test đối chiếu với kết quả tính tay đã được kỹ sư trưởng xác nhận, và có ghi rõ tiêu chuẩn áp dụng cùng phiên bản.</p>
+<p><strong>Giá trị mang lại:</strong> chuẩn hoá chất lượng tính toán; giảm rủi ro sai sót; tạo nền cho việc tự động hoá sâu hơn về sau.</p>
+<h4 id="4211-logging-service"><span class="secnum">4.2.11</span><span class="sectext">Logging Service</span></h4>
+<p><strong>Mục đích:</strong> vì hai lý do độc lập. Thứ nhất, để truy vết khi có sự cố hoặc khi cần giải trình. Thứ hai — và quan trọng hơn về lâu dài — vì chính nhật ký là nguyên liệu để xây dựng kho tri thức của đơn vị.</p>
+<p><strong>Chức năng chính:</strong> ghi lại ba loại nhật ký — hội thoại, thực thi công cụ, và tình huống kỹ thuật.</p>
+<p><strong>Luồng hoạt động:</strong> ghi bất đồng bộ để không làm chậm luồng trả lời; lưu vào PostgreSQL với chính sách lưu trữ và ẩn danh rõ ràng. Chi tiết ở Mục 8.</p>
+<p><strong>Giá trị mang lại:</strong> biến hoạt động sử dụng hằng ngày thành dữ liệu tài sản.</p>
+<h4 id="4212-mcp-server"><span class="secnum">4.2.12</span><span class="sectext">MCP Server</span></h4>
+<p><strong>Mục đích:</strong> bảo đảm tầng dịch vụ nghiệp vụ không bị ràng buộc vào một ứng dụng duy nhất. Khi đơn vị triển khai ứng dụng AI tiếp theo, hoặc khi cần đưa công cụ nội bộ vào môi trường làm việc khác, bộ công cụ đã sẵn sàng để tái sử dụng.</p>
+<p><strong>Chức năng chính:</strong> công bố bộ công cụ nghiệp vụ theo chuẩn MCP để các ứng dụng AI khác sử dụng lại.</p>
+<p><strong>Luồng hoạt động:</strong> tiếp nhận yêu cầu theo chuẩn MCP, ánh xạ sang lời gọi API nghiệp vụ nội bộ và chuyển tiếp kết quả; không chứa logic tính toán. Chi tiết tại Mục 11.</p>
+<p><strong>Giá trị mang lại:</strong> bảo vệ giá trị đầu tư dài hạn; tránh phụ thuộc vào một nhà cung cấp.</p>
+<h3 id="43-luồng-xử-lý-một-yêu-cầu-điển-hình"><span class="secnum">4.3</span><span class="sectext">Luồng xử lý một yêu cầu điển hình</span></h3>
+<figure class="diagram"><div class="diagram-scroll"><pre class="mermaid">sequenceDiagram
+    participant E as Kỹ sư
+    participant W as Web UI
+    participant A as Agent Runtime
+    participant R as RAG Service
+    participant C as Case Service
+    participant T as Tool Executor
+    participant L as Logging
+
+    E-&gt;&gt;W: Đặt câu hỏi kỹ thuật
+    W-&gt;&gt;A: Gửi yêu cầu kèm danh tính
+    A-&gt;&gt;R: Truy xuất tài liệu liên quan
+    R--&gt;&gt;A: Các đoạn tài liệu kèm nguồn
+    A-&gt;&gt;C: Tìm tình huống tương tự
+    C--&gt;&gt;A: Danh sách tình huống đã duyệt
+    A-&gt;&gt;T: Gọi công cụ kiểm tra tính toán
+    T--&gt;&gt;A: Kết quả kiểm định
+    A-&gt;&gt;L: Ghi nhật ký hội thoại và công cụ
+    A--&gt;&gt;W: Câu trả lời kèm dẫn chứng
+    W--&gt;&gt;E: Hiển thị đề xuất chờ phê duyệt
+    E-&gt;&gt;W: Phê duyệt hoặc bác bỏ
+    W-&gt;&gt;C: Ghi nhận tình huống mới</pre></div><figcaption>Sơ đồ 5</figcaption></figure>
+<h3 id="44-nguyên-tắc-phân-tách-trách-nhiệm"><span class="secnum">4.4</span><span class="sectext">Nguyên tắc phân tách trách nhiệm</span></h3>
+<p>Kiến trúc trên tuân theo một quy tắc đơn giản nhưng có hệ quả lớn: <strong>mỗi tầng chỉ biết tầng ngay dưới nó</strong>.</p>
+<div class="tablewrap"><table><thead><tr><th>Tầng</th><th>Được phép gọi</th><th>Không được phép</th></tr></thead><tbody><tr><td>Web UI</td><td>API Gateway</td><td>Gọi thẳng Agent hoặc dịch vụ nghiệp vụ</td></tr><tr><td>Agent Runtime</td><td>RAG, Case, Tool Executor, LLM</td><td>Truy cập cơ sở dữ liệu trực tiếp</td></tr><tr><td>Tool Executor</td><td>Tool Permission Layer</td><td>Bỏ qua kiểm tra quyền</td></tr><tr><td>Business Services</td><td>Cơ sở dữ liệu, hệ thống bên ngoài</td><td>Gọi ngược lên Agent</td></tr><tr><td>MCP Server</td><td>Business Services</td><td>Chứa logic nghiệp vụ riêng</td></tr></tbody></table></div>
+<p>Quy tắc này đảm bảo mọi đường đi tới dữ liệu đều phải qua điểm kiểm soát quyền, và không có đường tắt nào tồn tại — kể cả khi có người muốn tạo ra một đường tắt để &quot;cho nhanh&quot;.</p>
+<hr>
+<h2 id="5-kiến-trúc-ai-agent"><span class="secnum">5</span><span class="sectext">Kiến trúc AI Agent</span></h2>
+<h3 id="51-vì-sao-cần-một-agent-không-chỉ-cần-một-chatbot"><span class="secnum">5.1</span><span class="sectext">Vì sao cần một Agent, không chỉ cần một chatbot</span></h3>
+<p>Một chatbot thông thường hoạt động theo mô hình một chiều: nhận câu hỏi, sinh câu trả lời. Mô hình này đủ cho các câu hỏi có đáp án nằm trọn trong một đoạn văn bản, nhưng không đủ cho công việc kỹ thuật, vì phần lớn câu hỏi kỹ thuật đòi hỏi <strong>nhiều bước phụ thuộc lẫn nhau</strong>.</p>
+<p>Đối với yêu cầu <em>&quot;Dầm B12 không đạt kiểm tra ứng suất, cần tăng cốt thép bao nhiêu&quot;</em>, quá trình xử lý đòi hỏi tối thiểu ba bước phụ thuộc: truy vấn thông số tiết diện của cấu kiện từ cơ sở dữ liệu dự án; tra cứu tình huống tương tự trên cơ sở thông số vừa truy vấn; và thực hiện kiểm định đối với phương án đề xuất. Số lượng và thứ tự các bước không xác định trước mà phụ thuộc vào kết quả của bước liền trước.</p>
+<p>Agent Runtime là thành phần thực hiện chuỗi bước đó. Nó không phải là &quot;AI thông minh hơn&quot; — nó là <strong>một vòng lặp có kiểm soát</strong>, trong đó LLM chỉ đóng vai trò quyết định bước tiếp theo, còn mọi hành động thực tế đều do các công cụ đã được phê duyệt thực hiện.</p>
+<h3 id="52-trách-nhiệm-của-agent-runtime"><span class="secnum">5.2</span><span class="sectext">Trách nhiệm của Agent Runtime</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Trách nhiệm</th><th>Nội dung</th><th>Ràng buộc an toàn</th></tr></thead><tbody><tr><td><strong>Tiếp nhận yêu cầu</strong></td><td>Nhận câu hỏi kèm ngữ cảnh: dự án đang mở, cấu kiện đang xem, lịch sử hội thoại</td><td>Chỉ nhận ngữ cảnh mà người dùng có quyền truy cập</td></tr><tr><td><strong>Xác định ý định</strong></td><td>Phân loại câu hỏi: tra tài liệu, tra tình huống, yêu cầu tính toán, hay kết hợp</td><td>Nếu không phân loại được, hỏi lại thay vì đoán</td></tr><tr><td><strong>Lập kế hoạch bước tiếp theo</strong></td><td>Quyết định gọi công cụ nào với tham số nào</td><td>Chỉ được chọn trong danh mục công cụ đã đăng ký</td></tr><tr><td><strong>Gọi công cụ</strong></td><td>Gửi yêu cầu tới Tool Executor và chờ kết quả</td><td>Có timeout; có giới hạn số lần gọi mỗi phiên</td></tr><tr><td><strong>Quan sát và điều chỉnh</strong></td><td>Đọc kết quả, quyết định tiếp tục hay dừng</td><td>Có giới hạn số vòng lặp tối đa</td></tr><tr><td><strong>Tổng hợp kết quả</strong></td><td>Diễn đạt câu trả lời kèm dẫn chứng đầy đủ</td><td>Không được nêu số liệu không có nguồn</td></tr><tr><td><strong>Bàn giao cho con người</strong></td><td>Trình bày đề xuất ở trạng thái chờ phê duyệt</td><td>Không có cơ chế tự phê duyệt</td></tr></tbody></table></div>
+<h3 id="53-vòng-lặp-hoạt-động-của-agent"><span class="secnum">5.3</span><span class="sectext">Vòng lặp hoạt động của Agent</span></h3>
+<figure class="diagram"><div class="diagram-scroll"><pre class="mermaid">flowchart TD
+    A[&quot;Nhận câu hỏi và ngữ cảnh&quot;] --&gt; B[&quot;Xác định ý định&quot;]
+    B --&gt; C{&quot;Đã đủ thông tin để trả lời?&quot;}
+    C --&gt;|&quot;Chưa&quot;| D[&quot;Chọn công cụ phù hợp&quot;]
+    D --&gt; E[&quot;Kiểm tra quyền và tham số&quot;]
+    E --&gt; F{&quot;Hợp lệ?&quot;}
+    F --&gt;|&quot;Không&quot;| G[&quot;Báo lỗi rõ ràng cho người dùng&quot;]
+    F --&gt;|&quot;Có&quot;| H[&quot;Thực thi công cụ&quot;]
+    H --&gt; I[&quot;Ghi nhật ký thực thi&quot;]
+    I --&gt; J[&quot;Đưa kết quả vào ngữ cảnh&quot;]
+    J --&gt; K{&quot;Đã vượt giới hạn vòng lặp?&quot;}
+    K --&gt;|&quot;Rồi&quot;| L[&quot;Dừng và báo trạng thái hiện có&quot;]
+    K --&gt;|&quot;Chưa&quot;| C
+    C --&gt;|&quot;Đủ&quot;| M[&quot;Tổng hợp câu trả lời kèm dẫn chứng&quot;]
+    M --&gt; N[&quot;Trình kỹ sư phê duyệt&quot;]</pre></div><figcaption>Sơ đồ 6</figcaption></figure>
+<p>Hai nhánh cần chú ý trong sơ đồ, vì chúng thể hiện nguyên tắc thiết kế chứ không chỉ là chi tiết kỹ thuật:</p>
+<ul><li><strong>Nhánh &quot;Báo lỗi rõ ràng&quot;</strong>: khi tham số không hợp lệ hoặc người dùng không đủ quyền, hệ thống thông báo rõ lý do, thay vì bỏ qua bước xử lý đó và tiếp tục trả lời trên dữ liệu không đầy đủ. Câu trả lời dựa trên dữ liệu không đầy đủ mà không có cảnh báo là dạng lỗi có mức độ nghiêm trọng cao nhất trong hệ thống.</li><li><strong>Nhánh &quot;Vượt giới hạn vòng lặp&quot;</strong>: nếu Agent không hội tụ sau số bước cho phép, nó dừng và trình bày các kết quả đã thu thập được, thay vì tiếp tục lặp hoặc đưa ra kết luận không có căn cứ.</li></ul>
+<h3 id="54-tool-calling-cơ-chế-và-ý-nghĩa-an-toàn"><span class="secnum">5.4</span><span class="sectext">Tool Calling — cơ chế và ý nghĩa an toàn</span></h3>
+<p><strong>Nguyên tắc cốt lõi: AI không truy cập trực tiếp bất kỳ hệ thống nào.</strong></p>
+<p>Chuỗi truy cập bắt buộc:</p>
+<figure class="diagram"><div class="diagram-scroll"><pre class="mermaid">flowchart LR
+    U[&quot;Kỹ sư&quot;] --&gt; A[&quot;AI Agent&quot;]
+    A --&gt; T[&quot;Công cụ đã đăng ký&quot;]
+    T --&gt; P[&quot;Tool Permission Layer&quot;]
+    P --&gt; S[&quot;Business Service&quot;]
+    S --&gt; D[&quot;Cơ sở dữ liệu hoặc API nội bộ&quot;]</pre></div><figcaption>Sơ đồ 7</figcaption></figure>
+<p>Mỗi mũi tên trong chuỗi này là một điểm kiểm soát:</p>
+<div class="tablewrap"><table><thead><tr><th>Điểm</th><th>Kiểm soát gì</th><th>Ngăn chặn được điều gì</th></tr></thead><tbody><tr><td>Kỹ sư → Agent</td><td>Xác thực danh tính, phạm vi dự án</td><td>Người ngoài truy cập hệ thống</td></tr><tr><td>Agent → Công cụ</td><td>Chỉ chọn được công cụ trong danh mục</td><td>AI thực hiện hành động ngoài dự kiến</td></tr><tr><td>Công cụ → Permission Layer</td><td>Kiểm tra quyền theo người dùng cuối</td><td>Lộ dữ liệu dự án không thuộc quyền</td></tr><tr><td>Permission → Service</td><td>Xác thực lược đồ tham số</td><td>Tham số sai kiểu, ngoài khoảng cho phép</td></tr><tr><td>Service → Dữ liệu</td><td>Logic nghiệp vụ và ràng buộc dữ liệu</td><td>Ghi dữ liệu sai, thao tác không hợp lệ</td></tr></tbody></table></div>
+<p><strong>Vì sao đây là lợi ích bảo mật quyết định:</strong> nếu cho AI quyền sinh câu lệnh SQL và chạy trực tiếp, thì phạm vi thiệt hại tiềm tàng bằng đúng quyền của tài khoản cơ sở dữ liệu — nghĩa là gần như không giới hạn. Khi AI chỉ được gọi công cụ, phạm vi hành động của nó bằng đúng tập công cụ đã đăng ký, và mỗi công cụ đã được rà soát trước khi đưa vào danh mục. Đây là khác biệt giữa một rủi ro không giới hạn và một rủi ro đã được liệt kê hết.</p>
+<p>Một lợi ích phụ nhưng quan trọng: vì mọi hành động đều đi qua công cụ, <strong>mọi hành động đều được ghi nhật ký ở cùng một chỗ</strong>. Không có đường đi nào của AI mà hệ thống không nhìn thấy.</p>
+<h3 id="55-phân-loại-công-cụ-theo-mức-rủi-ro"><span class="secnum">5.5</span><span class="sectext">Phân loại công cụ theo mức rủi ro</span></h3>
+<p>Không phải công cụ nào cũng có mức rủi ro như nhau. Hệ thống phân công cụ thành ba nhóm với chế độ kiểm soát khác nhau:</p>
+<div class="tablewrap"><table><thead><tr><th>Nhóm</th><th>Đặc điểm</th><th>Ví dụ</th><th>Chế độ kiểm soát</th></tr></thead><tbody><tr><td><strong>Nhóm A — Chỉ đọc</strong></td><td>Không thay đổi dữ liệu</td><td>Tra thông số cấu kiện, tra tài liệu, tra tình huống</td><td>Agent gọi tự do trong phạm vi quyền của người dùng</td></tr><tr><td><strong>Nhóm B — Tính toán</strong></td><td>Không thay đổi dữ liệu, nhưng kết quả có thể vào hồ sơ</td><td>Kiểm tra khả năng chịu uốn, tính độ võng</td><td>Gọi tự do, nhưng kết quả luôn hiển thị kèm tham số đầu vào để kỹ sư đối chiếu</td></tr><tr><td><strong>Nhóm C — Ghi dữ liệu</strong></td><td>Thay đổi trạng thái hệ thống</td><td>Ghi tình huống mới, cập nhật thông số cấu kiện</td><td>Bắt buộc có xác nhận của người dùng trước khi thực thi</td></tr></tbody></table></div>
+<p>Trong giai đoạn 1 và 2, chỉ triển khai nhóm A và B. Nhóm C chỉ được mở khi hệ thống đã vận hành ổn định và đội ngũ đã tin tưởng vào chất lượng đề xuất.</p>
+<h3 id="56-quản-lý-ngữ-cảnh-và-chi-phí"><span class="secnum">5.6</span><span class="sectext">Quản lý ngữ cảnh và chi phí</span></h3>
+<p>Mỗi lời gọi tới LLM có chi phí tính theo lượng văn bản gửi đi và nhận về. Một Agent thiết kế kém có thể gửi lại toàn bộ lịch sử hội thoại và toàn bộ tài liệu ở mỗi vòng lặp, khiến chi phí tăng theo cấp số nhân.</p>
+<p>Ba biện pháp kiểm soát được áp dụng:</p>
+<ol><li><strong>Chọn lọc ngữ cảnh:</strong> chỉ đưa vào ngữ cảnh các đoạn tài liệu thực sự liên quan (thường 5–8 đoạn), không đưa toàn bộ tài liệu.</li><li><strong>Tóm tắt lịch sử:</strong> với hội thoại dài, các lượt cũ được tóm tắt lại thay vì giữ nguyên văn.</li><li><strong>Ngân sách theo phiên:</strong> mỗi phiên có giới hạn số vòng lặp và giới hạn tổng lượng văn bản xử lý; vượt ngưỡng thì Agent dừng và báo cho người dùng.</li></ol>
+<p>Các biện pháp này cần được đưa vào thiết kế <strong>ngay từ đầu</strong>. Bổ sung sau khi hệ thống đã chạy là công việc tốn kém và thường phải sửa lại kiến trúc.</p>
+<h3 id="57-xử-lý-trường-hợp-agent-không-chắc-chắn"><span class="secnum">5.7</span><span class="sectext">Xử lý trường hợp Agent không chắc chắn</span></h3>
+<p>Đây là phần thể hiện rõ nhất nguyên tắc <span class="tok">AD-08</span>. Hệ thống có ba mức phản hồi khi độ tin cậy không đủ:</p>
+<div class="tablewrap"><table><thead><tr><th>Tình huống</th><th>Phản hồi của hệ thống</th></tr></thead><tbody><tr><td>Không tìm thấy tài liệu liên quan</td><td>&quot;Không tìm thấy căn cứ trong tài liệu nội bộ về nội dung này. Đề nghị tham khảo trực tiếp tiêu chuẩn hoặc liên hệ chủ nhiệm bộ môn.&quot;</td></tr><tr><td>Tìm thấy tài liệu nhưng nội dung mâu thuẫn</td><td>Trình bày cả hai nguồn kèm ghi chú rõ về mâu thuẫn, không tự chọn một bên</td></tr><tr><td>Tình huống lịch sử tương tự nhưng khác biệt về điều kiện</td><td>Nêu rõ các điểm khác biệt so với bài toán hiện tại, để kỹ sư tự đánh giá mức độ áp dụng được</td></tr></tbody></table></div>
+<p>Ba phản hồi này không phải là &quot;hệ thống hoạt động kém&quot;. Chúng là hệ thống hoạt động đúng thiết kế. Một trợ lý biết nói &quot;tôi không chắc&quot; là trợ lý dùng được lâu dài.</p>
+<hr>
+<h2 id="6-kiến-trúc-rag"><span class="secnum">6</span><span class="sectext">Kiến trúc RAG</span></h2>
+<h3 id="61-cơ-chế-hoạt-động-của-rag"><span class="secnum">6.1</span><span class="sectext">Cơ chế hoạt động của RAG</span></h3>
+<p>Một mô hình ngôn ngữ được huấn luyện trên dữ liệu công khai. Nó biết rất nhiều về kỹ thuật xây dựng nói chung, nhưng <strong>không biết gì về tài liệu của đơn vị</strong>: quy trình nội bộ, mẫu hồ sơ, hồ sơ dự án cũ, các quy ước riêng.</p>
+<p>Có hai cách khắc phục. Cách thứ nhất là huấn luyện lại mô hình trên dữ liệu nội bộ (fine-tuning). Cách thứ hai là RAG: <strong>giữ nguyên mô hình, nhưng mỗi lần hỏi thì tìm sẵn các đoạn tài liệu liên quan và đưa vào cùng câu hỏi</strong>, kèm chỉ thị rõ ràng: chỉ được trả lời dựa trên các đoạn này.</p>
+<p>Phương án thứ hai được lựa chọn (<span class="tok">AD-01</span>). Về mặt xử lý, phương án này phát sinh thêm bước truy xuất tài liệu trước khi sinh câu trả lời, làm tăng thời gian phản hồi ở mức không đáng kể. Bù lại, phương án đáp ứng được ba yêu cầu mà fine-tuning không đáp ứng: khả năng trích dẫn nguồn, khả năng cập nhật tức thì khi tài liệu thay đổi, và khả năng giới hạn phạm vi tra cứu theo quyền truy cập của người dùng.</p>
+<h3 id="62-vì-sao-rag-là-bắt-buộc-trong-bối-cảnh-kỹ-thuật"><span class="secnum">6.2</span><span class="sectext">Vì sao RAG là bắt buộc trong bối cảnh kỹ thuật</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Lý do</th><th>Diễn giải</th></tr></thead><tbody><tr><td><strong>Câu trả lời dựa trên dữ liệu nội bộ</strong></td><td>Kỹ sư cần biết quy định áp dụng tại đơn vị, không phải thông lệ chung của ngành</td></tr><tr><td><strong>Giảm hallucination</strong></td><td>Khi bị ràng buộc chỉ sử dụng các đoạn tài liệu đã cung cấp, tỉ lệ nội dung không chính xác giảm đáng kể</td></tr><tr><td><strong>Cung cấp dẫn chứng</strong></td><td>Mỗi câu trả lời chỉ ra được nguồn: tên tài liệu, trang, điều khoản — điều kiện bắt buộc để dùng trong hồ sơ</td></tr><tr><td><strong>Cập nhật tức thì</strong></td><td>Thay tài liệu mới, hệ thống trả lời theo bản mới sau khi xử lý lại, không cần huấn luyện</td></tr><tr><td><strong>Kiểm soát phạm vi</strong></td><td>Có thể giới hạn hệ thống chỉ tra trong tập tài liệu mà người hỏi được phép xem</td></tr></tbody></table></div>
+<p>Điểm thứ ba đáng nhấn mạnh với lãnh đạo: <strong>một câu trả lời không có dẫn chứng thì không dùng được trong hồ sơ kỹ thuật</strong>, dù nội dung có đúng. Kỹ sư ký hồ sơ phải chỉ ra được căn cứ. RAG là kiến trúc duy nhất trong các lựa chọn hiện có đáp ứng được yêu cầu này một cách tự nhiên.</p>
+<h3 id="63-quy-trình-xử-lý-tài-liệu"><span class="secnum">6.3</span><span class="sectext">Quy trình xử lý tài liệu</span></h3>
+<figure class="diagram"><div class="diagram-scroll"><pre class="mermaid">flowchart TD
+    A[&quot;Tài liệu gốc: PDF, DOCX, XLSX, bản vẽ&quot;] --&gt; B[&quot;Thu thập và phân loại&quot;]
+    B --&gt; C[&quot;Trích xuất nội dung&quot;]
+    C --&gt; D[&quot;Làm sạch và chuẩn hoá&quot;]
+    D --&gt; E[&quot;Cắt thành đoạn&quot;]
+    E --&gt; F[&quot;Gắn metadata&quot;]
+    F --&gt; G[&quot;Tạo embedding&quot;]
+    G --&gt; H[&quot;Lưu vào Vector Database&quot;]
+    A --&gt; I[&quot;Lưu bản gốc vào S3&quot;]
+    H --&gt; J[&quot;Sẵn sàng truy xuất&quot;]
+    I --&gt; J</pre></div><figcaption>Sơ đồ 8</figcaption></figure>
+<h4 id="631-thu-thập-và-phân-loại"><span class="secnum">6.3.1</span><span class="sectext">Thu thập và phân loại</span></h4>
+<p><strong>Mục đích:</strong> không phải mọi tài liệu đều đáng đưa vào hệ thống. Một bản nháp cũ hoặc một tiêu chuẩn đã hết hiệu lực sẽ làm ô nhiễm kho tri thức. Bước phân loại là bước <strong>con người phải làm</strong>, không tự động hoá được hoàn toàn.</p>
+<p><strong>Chức năng chính:</strong> đưa tài liệu từ các nguồn phân tán vào một nơi tập trung, gán loại tài liệu và mức độ ưu tiên.</p>
+<p><strong>Phân loại đề xuất:</strong></p>
+<div class="tablewrap"><table><thead><tr><th>Loại tài liệu</th><th>Ví dụ</th><th>Ưu tiên</th></tr></thead><tbody><tr><td>Tiêu chuẩn, quy chuẩn</td><td>TCVN, ACI, Eurocode</td><td>Cao — đưa vào trước</td></tr><tr><td>Quy trình nội bộ</td><td>Quy định lập hồ sơ, checklist kiểm tra</td><td>Cao</td></tr><tr><td>Sổ tay kỹ thuật</td><td>Sổ tay thiết kế, bảng tra vật liệu</td><td>Cao</td></tr><tr><td>Thuyết minh tính toán dự án</td><td>Hồ sơ đã nghiệm thu</td><td>Trung bình — cần rà soát bảo mật</td></tr><tr><td>Biên bản thẩm tra</td><td>Ý kiến và phản hồi</td><td>Cao — chứa tri thức quý hiếm</td></tr><tr><td>Bản vẽ</td><td>DWG, PDF</td><td>Thấp ở giai đoạn 1 — cần xử lý riêng</td></tr></tbody></table></div>
+<p><strong>Giá trị mang lại:</strong> chất lượng đầu ra của toàn hệ thống bị giới hạn bởi chất lượng bước này. Đây là nơi đơn vị cần đầu tư thời gian của kỹ sư có kinh nghiệm.</p>
+<h4 id="632-trích-xuất-nội-dung"><span class="secnum">6.3.2</span><span class="sectext">Trích xuất nội dung</span></h4>
+<p><strong>Mục đích:</strong> máy không đọc trực tiếp được PDF hay DOCX theo cách hiểu được ngữ nghĩa; cần tách ra văn bản, bảng biểu, tiêu đề, chú thích.</p>
+<p><strong>Chức năng chính:</strong> chuyển tài liệu từ định dạng gốc sang văn bản có cấu trúc.</p>
+<p><strong>Luồng hoạt động:</strong> dùng thư viện trích xuất cho từng định dạng; với PDF quét ảnh, dùng OCR có hỗ trợ tiếng Việt. Bảng biểu được giữ nguyên cấu trúc hàng — cột thay vì làm phẳng thành văn xuôi, vì bảng tra vật liệu mất cấu trúc là bảng vô dụng.</p>
+<p><strong>Điểm cần lưu ý:</strong> tài liệu kỹ thuật tiếng Việt thường có công thức, ký hiệu và chỉ số dưới. Bước này cần được kiểm tra thủ công trên một mẫu đại diện trước khi xử lý hàng loạt.</p>
+<p><strong>Giá trị mang lại:</strong> quyết định việc hệ thống có tra được bảng biểu và công thức hay không — vốn là phần kỹ sư cần tra nhiều nhất.</p>
+<h4 id="633-cắt-thành-đoạn-chunking"><span class="secnum">6.3.3</span><span class="sectext">Cắt thành đoạn (chunking)</span></h4>
+<p><strong>Mục đích:</strong> không thể đưa cả một tiêu chuẩn 300 trang vào ngữ cảnh mỗi lần hỏi. Cần tìm và đưa vào đúng phần liên quan.</p>
+<p><strong>Chức năng chính:</strong> chia tài liệu dài thành các đoạn nhỏ, mỗi đoạn đủ ngắn để đưa vào ngữ cảnh và đủ dài để tự nó có nghĩa.</p>
+<p><strong>Luồng hoạt động:</strong> cắt theo cấu trúc tài liệu (chương, điều, mục) thay vì cắt theo số ký tự cố định. Với tiêu chuẩn kỹ thuật, một điều khoản là một đơn vị ngữ nghĩa tự nhiên và nên là một đoạn. Các đoạn liền kề có phần chồng lấn để không mất ngữ cảnh ở ranh giới.</p>
+<p><strong>Điểm cần lưu ý:</strong> phương án cắt đoạn không phù hợp là một trong các nguyên nhân chính làm giảm chất lượng truy xuất. Một điều khoản bị cắt đôi giữa chừng sẽ cho ra hai đoạn đều vô nghĩa.</p>
+<p><strong>Giá trị mang lại:</strong> ảnh hưởng trực tiếp tới độ chính xác của câu trả lời.</p>
+<h4 id="634-gắn-metadata"><span class="secnum">6.3.4</span><span class="sectext">Gắn metadata</span></h4>
+<p><strong>Mục đích:</strong> metadata phục vụ ba mục đích thiết yếu — lọc theo quyền truy cập, lọc theo hiệu lực (không trả lời theo tiêu chuẩn đã hết hiệu lực), và tạo trích dẫn chính xác.</p>
+<p><strong>Chức năng chính:</strong> gắn cho mỗi đoạn các thông tin: thuộc tài liệu nào, trang nào, điều khoản nào, loại tài liệu gì, hiệu lực từ ngày nào, thuộc dự án nào, mức truy cập ra sao.</p>
+<p><strong>Giá trị mang lại:</strong> không có metadata thì không có dẫn chứng, và không có dẫn chứng thì hệ thống không dùng được cho công việc kỹ thuật.</p>
+<h4 id="635-tạo-embedding-và-lưu-trữ"><span class="secnum">6.3.5</span><span class="sectext">Tạo embedding và lưu trữ</span></h4>
+<p><strong>Mục đích:</strong> để tìm kiếm theo ý nghĩa. Hai đoạn văn bản dùng từ ngữ khác nhau nhưng cùng nói về độ võng của dầm sẽ có biểu diễn số gần nhau, nên tìm được nhau.</p>
+<p><strong>Chức năng chính:</strong> chuyển mỗi đoạn văn bản thành một dãy số biểu diễn ý nghĩa của đoạn đó, lưu vào vector database.</p>
+<p><strong>Luồng hoạt động:</strong> gọi mô hình embedding, lưu vector kèm metadata và tham chiếu tới bản gốc.</p>
+<p><strong>Giá trị mang lại:</strong> đây là cơ chế cho phép kỹ sư hỏi bằng ngôn ngữ tự nhiên thay vì phải đoán đúng từ khoá có trong tài liệu.</p>
+<h3 id="64-quy-trình-truy-xuất-khi-có-câu-hỏi"><span class="secnum">6.4</span><span class="sectext">Quy trình truy xuất khi có câu hỏi</span></h3>
+<figure class="diagram"><div class="diagram-scroll"><pre class="mermaid">flowchart TD
+    A[&quot;Câu hỏi của kỹ sư&quot;] --&gt; B[&quot;Chuẩn hoá và mở rộng câu hỏi&quot;]
+    B --&gt; C[&quot;Tìm theo ngữ nghĩa trong Vector DB&quot;]
+    B --&gt; D[&quot;Tìm theo từ khoá&quot;]
+    C --&gt; E[&quot;Hợp nhất kết quả&quot;]
+    D --&gt; E
+    E --&gt; F[&quot;Lọc theo quyền truy cập và hiệu lực&quot;]
+    F --&gt; G[&quot;Sắp xếp lại theo mức liên quan&quot;]
+    G --&gt; H{&quot;Điểm liên quan đạt ngưỡng?&quot;}
+    H --&gt;|&quot;Không&quot;| I[&quot;Trả lời: không đủ căn cứ&quot;]
+    H --&gt;|&quot;Có&quot;| J[&quot;Đưa các đoạn vào ngữ cảnh LLM&quot;]
+    J --&gt; K[&quot;Sinh câu trả lời kèm trích dẫn&quot;]</pre></div><figcaption>Sơ đồ 9</figcaption></figure>
+<p>Ba điểm thiết kế đáng chú ý:</p>
+<p><strong>Kết hợp hai phương pháp tìm kiếm.</strong> Tìm theo ngữ nghĩa tốt cho câu hỏi diễn đạt tự do, nhưng kém khi cần khớp chính xác một mã hiệu — ví dụ &quot;TCVN 5574&quot; hay &quot;cấu kiện B12&quot;. Tìm theo từ khoá ngược lại. Kết hợp cả hai cho kết quả tốt hơn hẳn từng phương pháp riêng lẻ trong bối cảnh kỹ thuật, nơi mã hiệu xuất hiện dày đặc.</p>
+<p><strong>Lọc quyền trước khi đưa vào ngữ cảnh.</strong> Việc lọc phải xảy ra <strong>trước</strong> khi nội dung được gửi tới LLM, không phải sau. Nếu lọc sau, dữ liệu ngoài quyền đã bị gửi đi rồi.</p>
+<p><strong>Ngưỡng độ liên quan.</strong> Nếu đoạn tài liệu tốt nhất tìm được vẫn có điểm liên quan thấp, hệ thống trả lời &quot;không đủ căn cứ&quot; thay vì cố ghép một câu trả lời từ tài liệu không liên quan.</p>
+<h3 id="65-cấu-trúc-câu-trả-lời-có-dẫn-chứng"><span class="secnum">6.5</span><span class="sectext">Cấu trúc câu trả lời có dẫn chứng</span></h3>
+<p>Mỗi câu trả lời từ tầng RAG có cấu trúc cố định:</p>
+<div class="codewrap"><div class="codelabel">json</div><pre class="code"><code>{
+  &quot;answer&quot;: &quot;Theo quy định nội bộ, chiều dày lớp bê tông bảo vệ cho dầm trong môi trường ven biển tối thiểu là 40 mm.&quot;,
+  &quot;citations&quot;: [
+    {
+      &quot;document_id&quot;: &quot;QT-KC-012&quot;,
+      &quot;document_title&quot;: &quot;Quy dinh thiet ke ket cau — Ban 3.2&quot;,
+      &quot;section&quot;: &quot;Muc 4.3&quot;,
+      &quot;page&quot;: 18,
+      &quot;effective_from&quot;: &quot;2024-06-01&quot;,
+      &quot;excerpt&quot;: &quot;Lop be tong bao ve toi thieu doi voi cau kien trong moi truong xam thuc trung binh: 40 mm.&quot;,
+      &quot;relevance_score&quot;: 0.91
+    }
+  ],
+  &quot;confidence&quot;: &quot;high&quot;,
+  &quot;conflicting_sources&quot;: []
+}</code></pre></div>
+<p>Cấu trúc này cho phép giao diện hiển thị đúng những gì kỹ sư cần để kiểm chứng: nội dung trích dẫn, vị trí trong tài liệu, ngày hiệu lực, và cảnh báo nếu có nguồn mâu thuẫn.</p>
+<h3 id="66-vận-hành-và-cập-nhật-kho-tài-liệu"><span class="secnum">6.6</span><span class="sectext">Vận hành và cập nhật kho tài liệu</span></h3>
+<p>RAG không phải là hệ thống &quot;làm một lần rồi xong&quot;. Cần có quy trình vận hành:</p>
+<div class="tablewrap"><table><thead><tr><th>Hoạt động</th><th>Tần suất</th><th>Người chịu trách nhiệm</th></tr></thead><tbody><tr><td>Bổ sung tài liệu mới</td><td>Khi phát sinh</td><td>Bộ phận kỹ thuật đề nghị, quản trị hệ thống xử lý</td></tr><tr><td>Đánh dấu tài liệu hết hiệu lực</td><td>Khi có phiên bản mới</td><td>Chủ sở hữu tài liệu</td></tr><tr><td>Rà soát chất lượng trả lời</td><td>Hằng tháng</td><td>Nhóm vận hành cùng đại diện kỹ thuật</td></tr><tr><td>Xử lý lại toàn bộ khi đổi mô hình embedding</td><td>Hiếm — khi nâng cấp lớn</td><td>Nhóm kỹ thuật hệ thống</td></tr></tbody></table></div>
+<p>Điểm thứ hai quan trọng và thường bị bỏ sót: <strong>tài liệu hết hiệu lực phải được đánh dấu, không phải xoá</strong>. Xoá đi thì không giải thích được vì sao hồ sơ cũ lại làm theo cách cũ. Đánh dấu hết hiệu lực cho phép hệ thống vừa không dùng nó để trả lời câu hỏi hiện tại, vừa tra lại được khi cần giải trình hồ sơ cũ.</p>
+<hr>
+<h2 id="7-hệ-thống-tri-thức-tình-huống-kỹ-thuật"><span class="secnum">7</span><span class="sectext">Hệ thống tri thức tình huống kỹ thuật</span></h2>
+<p>Mục này trình bày thành phần có giá trị dài hạn lớn nhất trong toàn bộ phương án kiến trúc: kho tri thức tình huống kỹ thuật (Engineering Case Knowledge Base). Đây cũng là thành phần khác biệt nhất so với các giải pháp trợ lý AI thương mại có sẵn trên thị trường.</p>
+<h3 id="71-mục-đích"><span class="secnum">7.1</span><span class="sectext">Mục đích</span></h3>
+<p>Thành phần này được thiết kế nhằm ghi nhận, chuẩn hoá và khai thác lại các quyết định kỹ thuật đã được phê duyệt trong quá trình thực hiện dự án.</p>
+<p>Cơ sở của yêu cầu này xuất phát từ một khoảng trống nghiệp vụ: hệ thống tài liệu nội bộ mô tả <strong>giới hạn được phép</strong> theo tiêu chuẩn, nhưng không mô tả <strong>thông lệ thiết kế thực tế</strong> của đơn vị. Khoảng cách giữa hai nội dung này chính là kinh nghiệm kỹ thuật, và hiện nay kinh nghiệm đó chỉ tồn tại ở dạng tri thức cá nhân, không được lưu trữ ở bất kỳ hệ thống nào.</p>
+<h3 id="72-chức-năng-chính"><span class="secnum">7.2</span><span class="sectext">Chức năng chính</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Chức năng</th><th>Mô tả</th></tr></thead><tbody><tr><td>Ghi nhận tình huống</td><td>Lưu bản ghi có cấu trúc cho mỗi bài toán kỹ thuật đã xử lý và được phê duyệt</td></tr><tr><td>Chuẩn hoá dữ liệu</td><td>Kiểm tra tính đầy đủ và hợp lệ của các trường bắt buộc trước khi ghi nhận</td></tr><tr><td>Tra cứu tương tự</td><td>Tìm các tình huống có điều kiện đầu vào gần với bài toán đang xử lý</td></tr><tr><td>Quản lý trạng thái phê duyệt</td><td>Theo dõi trạng thái của từng tình huống: đề xuất, đã duyệt, bị bác, đã thay thế</td></tr><tr><td>Thống kê và phân tích</td><td>Cung cấp số liệu tổng hợp phục vụ công tác quản lý chất lượng thiết kế</td></tr></tbody></table></div>
+<h3 id="73-yêu-cầu-về-dữ-liệu-có-cấu-trúc"><span class="secnum">7.3</span><span class="sectext">Yêu cầu về dữ liệu có cấu trúc</span></h3>
+<p>Phương án lưu trữ tri thức tình huống dưới dạng dữ liệu có cấu trúc (structured data) thay vì dưới dạng văn bản tự do là một quyết định kiến trúc đã nêu tại <span class="tok">AD-03</span>. Mục này trình bày cơ sở của quyết định đó.</p>
+<p><strong>Hạn chế của phương án lưu trữ dạng văn bản.</strong> Nếu chỉ lưu lịch sử trao đổi dưới dạng văn bản và khai thác qua RAG, hệ thống gặp bốn hạn chế không khắc phục được:</p>
+<div class="tablewrap"><table><thead><tr><th>Hạn chế</th><th>Hệ quả nghiệp vụ</th></tr></thead><tbody><tr><td>Không lọc được theo tham số số học</td><td>Không thể truy vấn &quot;các dầm nhịp từ 7,0 m đến 7,5 m, bê tông cấp B25&quot;</td></tr><tr><td>Không kiểm tra được tính đầy đủ</td><td>Không phát hiện được trường hợp thiếu thông tin đầu vào quan trọng</td></tr><tr><td>Không thống kê được</td><td>Không trả lời được câu hỏi quản trị như &quot;tỉ lệ phương án bị thẩm tra bác trong quý&quot;</td></tr><tr><td>Không liên kết được với kết quả kiểm định</td><td>Không phân biệt được đề xuất đã kiểm chứng với đề xuất chưa kiểm chứng</td></tr></tbody></table></div>
+<p><strong>Ưu điểm của phương án dữ liệu có cấu trúc.</strong> Khi mỗi tình huống được lưu với các trường xác định, hệ thống có khả năng: truy vấn chính xác theo điều kiện kỹ thuật; xác thực dữ liệu tại thời điểm ghi nhận; tổng hợp số liệu phục vụ quản lý; và về dài hạn, phân tích xu hướng thiết kế của đơn vị.</p>
+<p>Cần lưu ý rằng hai phương án không loại trừ nhau. Kiến trúc đề xuất sử dụng <strong>mô hình lai</strong>: các trường số học và phân loại được lưu có cấu trúc phục vụ truy vấn chính xác; phần mô tả bài toán và lý do lựa chọn được lưu dạng văn bản và được tạo embedding phục vụ tra cứu theo ngữ nghĩa.</p>
+<h3 id="74-mô-hình-dữ-liệu-tình-huống-kỹ-thuật"><span class="secnum">7.4</span><span class="sectext">Mô hình dữ liệu tình huống kỹ thuật</span></h3>
+<p>Cấu trúc bản ghi tình huống được đề xuất như sau. Ví dụ minh hoạ sử dụng dữ liệu giả định.</p>
+<div class="codewrap"><div class="codelabel">json</div><pre class="code"><code>{
+  &quot;case_id&quot;: &quot;CASE-2026-000412&quot;,
+  &quot;created_at&quot;: &quot;2026-03-12T09:24:00+07:00&quot;,
+  &quot;project_ref&quot;: &quot;PRJ-2025-018&quot;,
+  &quot;discipline&quot;: &quot;ket-cau&quot;,
+  &quot;element_type&quot;: &quot;dam&quot;,
+  &quot;element_ref&quot;: &quot;B12&quot;,
+
+  &quot;problem&quot;: {
+    &quot;category&quot;: &quot;khong-dat-kiem-tra-chiu-uon&quot;,
+    &quot;summary&quot;: &quot;Dam B12 khong dat kiem tra kha nang chiu uon tai tiet dien giua nhip&quot;,
+    &quot;trigger&quot;: &quot;ket-qua-phan-tich-etabs&quot;
+  },
+
+  &quot;input&quot;: {
+    &quot;width_mm&quot;: 300,
+    &quot;height_mm&quot;: 600,
+    &quot;span_mm&quot;: 7200,
+    &quot;concrete_grade&quot;: &quot;B25&quot;,
+    &quot;steel_grade&quot;: &quot;CB400-V&quot;,
+    &quot;cover_mm&quot;: 30,
+    &quot;design_moment_kNm&quot;: 285,
+    &quot;load_combination&quot;: &quot;1.1DL + 1.2LL&quot;
+  },
+
+  &quot;solution&quot;: {
+    &quot;before&quot;: &quot;6D20&quot;,
+    &quot;after&quot;: &quot;8D25&quot;,
+    &quot;as_before_mm2&quot;: 1885,
+    &quot;as_after_mm2&quot;: 3927,
+    &quot;rho_after_percent&quot;: 2.18,
+    &quot;alternatives_considered&quot;: [
+      &quot;tang-chieu-cao-tiet-dien-len-650mm&quot;,
+      &quot;nang-cap-be-tong-len-B30&quot;
+    ],
+    &quot;rationale&quot;: &quot;Giu nguyen kich thuoc tiet dien de khong anh huong chieu cao thong thuy va he thong ky thuat da bo tri. Phuong an tang cot thep dat yeu cau ma khong phat sinh thay doi kien truc.&quot;
+  },
+
+  &quot;verification&quot;: {
+    &quot;status&quot;: &quot;PASS&quot;,
+    &quot;công cụ&quot;: &quot;calc.beam.flexure&quot;,
+    &quot;tool_version&quot;: &quot;1.4.2&quot;,
+    &quot;standard&quot;: &quot;TCVN 5574:2018&quot;,
+    &quot;safety_factor&quot;: 1.18,
+    &quot;executed_at&quot;: &quot;2026-03-12T09:31:00+07:00&quot;,
+    &quot;log_ref&quot;: &quot;TOOLLOG-2026-118273&quot;
+  },
+
+  &quot;approval&quot;: {
+    &quot;status&quot;: &quot;approved&quot;,
+    &quot;approved_by&quot;: &quot;user:ktv-0157&quot;,
+    &quot;approved_role&quot;: &quot;chu-tri-bo-mon-ket-cau&quot;,
+    &quot;approved_at&quot;: &quot;2026-03-12T14:05:00+07:00&quot;,
+    &quot;comment&quot;: &quot;Chap thuan. Luu y kiem tra khoang cach cot thep va dieu kien thi cong khi bo tri 8D25 trong be rong 300 mm.&quot;
+  },
+
+  &quot;review_outcome&quot;: {
+    &quot;external_review&quot;: &quot;passed&quot;,
+    &quot;review_body&quot;: &quot;don-vi-tham-tra-doc-lap&quot;,
+    &quot;review_date&quot;: &quot;2026-04-08&quot;
+  },
+
+  &quot;provenance&quot;: {
+    &quot;source_documents&quot;: [&quot;QT-KC-012#4.3&quot;, &quot;TCVN-5574-2018#8.1&quot;],
+    &quot;similar_cases_used&quot;: [&quot;CASE-2025-000188&quot;, &quot;CASE-2024-000902&quot;],
+    &quot;conversation_ref&quot;: &quot;CONV-2026-004417&quot;
+  }
+}</code></pre></div>
+<h3 id="75-giải-thích-các-nhóm-trường-dữ-liệu"><span class="secnum">7.5</span><span class="sectext">Giải thích các nhóm trường dữ liệu</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Nhóm trường</th><th>Mục đích</th><th>Vì sao bắt buộc</th></tr></thead><tbody><tr><td><code>problem</code></td><td>Phân loại bài toán theo danh mục chuẩn</td><td>Cho phép thống kê theo loại bài toán và tìm tình huống cùng loại</td></tr><tr><td><code>input</code></td><td>Ghi nhận đầy đủ điều kiện đầu vào ở dạng số</td><td>Là cơ sở duy nhất để đánh giá mức độ tương đồng giữa hai tình huống</td></tr><tr><td><code>solution</code></td><td>Phương án trước, phương án sau và các phương án đã cân nhắc</td><td>Trường <code>alternatives_considered</code> ghi lại các phương án bị loại — thông tin có giá trị cao và hiện không được lưu ở bất kỳ đâu</td></tr><tr><td><code>verification</code></td><td>Kết quả kiểm định kèm phiên bản công cụ và tiêu chuẩn áp dụng</td><td>Bảo đảm khả năng tái lập kết quả; phân biệt đề xuất đã kiểm chứng với chưa kiểm chứng</td></tr><tr><td><code>approval</code></td><td>Danh tính, vai trò, thời điểm và ý kiến của người phê duyệt</td><td>Xác lập trách nhiệm kỹ thuật; là điều kiện để tình huống được dùng làm tiền lệ</td></tr><tr><td><code>review_outcome</code></td><td>Kết quả thẩm tra của đơn vị độc lập</td><td>Phân biệt phương án được nội bộ chấp thuận với phương án đã qua thẩm tra bên ngoài</td></tr><tr><td><code>provenance</code></td><td>Nguồn tài liệu và các tình huống đã tham chiếu</td><td>Cho phép truy vết ngược toàn bộ căn cứ của một quyết định</td></tr></tbody></table></div>
+<p>Trường <code>approval</code> cần được nhấn mạnh trong quá trình phê duyệt chủ trương: <strong>một tình huống chỉ được hệ thống sử dụng làm tiền lệ khi đã có trạng thái <code>approved</code></strong>. Các đề xuất do hệ thống sinh ra nhưng chưa được phê duyệt được lưu ở trạng thái riêng, không tham gia vào quá trình tra cứu tương tự. Cơ chế này ngăn hiện tượng hệ thống tự củng cố các đề xuất chưa được con người xác nhận.</p>
+<h3 id="76-luồng-hoạt-động"><span class="secnum">7.6</span><span class="sectext">Luồng hoạt động</span></h3>
+<figure class="diagram"><div class="diagram-scroll"><pre class="mermaid">flowchart TD
+    A[&quot;Ky su dat cau hoi ky thuat&quot;] --&gt; B[&quot;Agent trich xuat tham so bai toan&quot;]
+    B --&gt; C[&quot;Tra cuu tinh huong tuong tu&quot;]
+    C --&gt; D{&quot;Co tinh huong da duyet phu hop?&quot;}
+    D --&gt;|&quot;Co&quot;| E[&quot;Trinh bay tien le kem diem khac biet&quot;]
+    D --&gt;|&quot;Khong&quot;| F[&quot;Chuyen sang tra cuu tai lieu tieu chuan&quot;]
+    E --&gt; G[&quot;Goi cong cu kiem dinh cho phuong an de xuat&quot;]
+    F --&gt; G
+    G --&gt; H[&quot;Tong hop de xuat kem dan chung&quot;]
+    H --&gt; I[&quot;Ky su danh gia&quot;]
+    I --&gt; J{&quot;Quyet dinh cua ky su&quot;}
+    J --&gt;|&quot;Phe duyet&quot;| K[&quot;Ghi nhan tinh huong o trang thai approved&quot;]
+    J --&gt;|&quot;Dieu chinh&quot;| L[&quot;Ghi nhan phuong an da dieu chinh kem ly do&quot;]
+    J --&gt;|&quot;Bac bo&quot;| M[&quot;Ghi nhan trang thai rejected kem ly do&quot;]
+    K --&gt; N[&quot;Kho tri thuc tinh huong&quot;]
+    L --&gt; N
+    M --&gt; N
+    N -.-&gt;|&quot;Phuc vu tra cuu lan sau&quot;| C</pre></div><figcaption>Sơ đồ 10</figcaption></figure>
+<p>Ba nhánh quyết định ở cuối sơ đồ đều dẫn tới việc ghi nhận dữ liệu. Trường hợp kỹ sư bác bỏ đề xuất có giá trị thông tin không kém trường hợp phê duyệt: nó xác định ranh giới áp dụng của các tiền lệ và là cơ sở để cải thiện chất lượng đề xuất trong các phiên bản tiếp theo.</p>
+<h3 id="77-cơ-chế-xác-định-tình-huống-tương-tự"><span class="secnum">7.7</span><span class="sectext">Cơ chế xác định tình huống tương tự</span></h3>
+<p>Việc xác định mức độ tương đồng giữa hai tình huống kỹ thuật được thực hiện theo ba bước, kết hợp truy vấn có cấu trúc và tra cứu theo ngữ nghĩa:</p>
+<p><strong>Bước 1 — Lọc theo điều kiện bắt buộc.</strong> Loại bỏ các tình huống không cùng loại cấu kiện, không cùng nhóm bài toán, hoặc áp dụng tiêu chuẩn đã hết hiệu lực. Bước này thu hẹp tập dữ liệu bằng truy vấn có cấu trúc, chi phí thấp.</p>
+<p><strong>Bước 2 — Tính khoảng cách trên các tham số số học.</strong> Với các tình huống còn lại, tính mức độ sai khác trên từng tham số đầu vào theo trọng số do bộ phận kỹ thuật quy định. Ví dụ đối với bài toán dầm chịu uốn:</p>
+<div class="tablewrap"><table><thead><tr><th>Tham số</th><th>Trọng số đề xuất</th><th>Cơ sở</th></tr></thead><tbody><tr><td>Cấp bê tông</td><td>Cao</td><td>Ảnh hưởng trực tiếp đến khả năng chịu lực</td></tr><tr><td>Nhóm cốt thép</td><td>Cao</td><td>Ảnh hưởng trực tiếp đến khả năng chịu lực</td></tr><tr><td>Tỉ số nhịp trên chiều cao</td><td>Cao</td><td>Quyết định dạng làm việc của cấu kiện</td></tr><tr><td>Bề rộng tiết diện</td><td>Trung bình</td><td>Ảnh hưởng đến điều kiện bố trí cốt thép</td></tr><tr><td>Mô men thiết kế</td><td>Trung bình</td><td>Đã phản ánh gián tiếp qua các tham số khác</td></tr><tr><td>Chiều dày lớp bảo vệ</td><td>Thấp</td><td>Biến thiên trong phạm vi hẹp</td></tr></tbody></table></div>
+<p>Bộ trọng số này phải do kỹ sư chuyên môn quy định, không do đội phát triển phần mềm tự đặt. Đây là điểm cần phân định trách nhiệm rõ trong giai đoạn triển khai.</p>
+<p><strong>Bước 3 — Tra cứu theo ngữ nghĩa trên phần mô tả.</strong> Hai tình huống có tham số gần nhau vẫn có thể khác nhau về bối cảnh — ví dụ một trường hợp bị ràng buộc chiều cao thông thuỷ, một trường hợp không. Phần mô tả bài toán và lý do lựa chọn được tra cứu theo ngữ nghĩa để bổ sung yếu tố bối cảnh vào kết quả xếp hạng.</p>
+<p>Kết quả trả về cho kỹ sư luôn kèm <strong>bảng so sánh điểm khác biệt</strong> giữa tình huống tham chiếu và bài toán hiện tại, thay vì chỉ trả về mức độ tương đồng dưới dạng một con số. Kỹ sư cần thông tin để tự đánh giá khả năng áp dụng, không cần một kết luận đã được rút gọn.</p>
+<h3 id="78-cơ-chế-thu-thập-dữ-liệu"><span class="secnum">7.8</span><span class="sectext">Cơ chế thu thập dữ liệu</span></h3>
+<p>Rủi ro lớn nhất của thành phần này là <strong>không có dữ liệu đầu vào</strong> (đã nêu tại giả định <span class="tok">GĐ-06</span>). Nếu việc ghi nhận tình huống được thiết kế như một nhiệm vụ bổ sung ngoài luồng công việc, tỉ lệ tuân thủ trong thực tế sẽ rất thấp.</p>
+<p>Phương án thiết kế áp dụng nguyên tắc <strong>ghi nhận trong luồng</strong> (in-workflow capture):</p>
+<div class="tablewrap"><table><thead><tr><th>Nguyên tắc</th><th>Cách hiện thực</th></tr></thead><tbody><tr><td>Điền sẵn tối đa</td><td>Hệ thống tự điền các trường đã biết từ ngữ cảnh phiên làm việc: tham số cấu kiện, kết quả tính toán, tài liệu đã tra cứu</td></tr><tr><td>Thao tác tối thiểu</td><td>Kỹ sư chỉ cần xác nhận, bổ sung lý do lựa chọn và bấm phê duyệt</td></tr><tr><td>Gắn với thao tác sẵn có</td><td>Việc ghi nhận diễn ra tại đúng thời điểm kỹ sư ra quyết định, không phải một biểu mẫu riêng điền sau</td></tr><tr><td>Lợi ích trực tiếp</td><td>Bản ghi tình huống có thể xuất thành phụ lục thuyết minh, phục vụ ngay công việc lập hồ sơ</td></tr></tbody></table></div>
+<p>Điểm cuối cùng là yếu tố quyết định tỉ lệ áp dụng: nếu bản ghi tình huống đồng thời là một sản phẩm phục vụ công việc hiện tại của kỹ sư, việc ghi nhận trở thành hoạt động có lợi ngay lập tức thay vì một yêu cầu hành chính.</p>
+<p>Ngoài ra, giai đoạn 3 bao gồm một hoạt động <strong>số hoá tình huống lịch sử</strong>: rà soát các hồ sơ dự án đã nghiệm thu và chuyển một phần thành bản ghi tình huống. Hoạt động này cần sự tham gia của kỹ sư có kinh nghiệm và nên được tổ chức theo từng đợt có mục tiêu số lượng cụ thể.</p>
+<h3 id="79-kiểm-soát-chất-lượng-dữ-liệu-tình-huống"><span class="secnum">7.9</span><span class="sectext">Kiểm soát chất lượng dữ liệu tình huống</span></h3>
+<p>Kho tri thức tình huống chỉ có giá trị nếu dữ liệu bên trong đáng tin cậy. Bốn cơ chế kiểm soát được đề xuất:</p>
+<div class="tablewrap"><table><thead><tr><th>Cơ chế</th><th>Nội dung</th><th>Thời điểm áp dụng</th></tr></thead><tbody><tr><td>Xác thực khi ghi nhận</td><td>Kiểm tra các trường bắt buộc, kiểm tra khoảng giá trị hợp lệ của tham số kỹ thuật</td><td>Tự động, tại thời điểm ghi</td></tr><tr><td>Bắt buộc có kết quả kiểm định</td><td>Tình huống không có trường <code>verification</code> không được dùng làm tiền lệ</td><td>Tự động</td></tr><tr><td>Rà soát định kỳ</td><td>Bộ phận kỹ thuật rà soát mẫu ngẫu nhiên hằng quý</td><td>Định kỳ, thủ công</td></tr><tr><td>Quản lý vòng đời</td><td>Đánh dấu tình huống đã lỗi thời khi tiêu chuẩn áp dụng thay đổi</td><td>Khi có thay đổi tiêu chuẩn</td></tr></tbody></table></div>
+<p>Cơ chế thứ tư có ý nghĩa đặc biệt: khi một tiêu chuẩn được thay thế, toàn bộ tình huống tham chiếu tiêu chuẩn cũ phải được đánh dấu để hệ thống không tiếp tục sử dụng làm tiền lệ cho các bài toán mới. Các bản ghi này vẫn được lưu giữ phục vụ mục đích giải trình hồ sơ cũ.</p>
+<h3 id="710-giá-trị-mang-lại"><span class="secnum">7.10</span><span class="sectext">Giá trị mang lại</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Khía cạnh</th><th>Giá trị</th></tr></thead><tbody><tr><td>Vận hành</td><td>Rút ngắn thời gian xử lý các bài toán đã có tiền lệ trong đơn vị</td></tr><tr><td>Chất lượng</td><td>Tăng tính nhất quán giữa các nhóm thiết kế thông qua tham chiếu chung</td></tr><tr><td>Quản trị</td><td>Cung cấp số liệu định lượng về hoạt động thiết kế phục vụ công tác quản lý chất lượng</td></tr><tr><td>Nhân sự</td><td>Giảm phụ thuộc vào tri thức cá nhân; rút ngắn thời gian đào tạo kỹ sư mới</td></tr><tr><td>Tài sản</td><td>Hình thành một tập dữ liệu chuyên ngành thuộc sở hữu của đơn vị, có giá trị tăng dần theo thời gian</td></tr></tbody></table></div>
+<p>Giá trị cuối cùng cần được xem xét ở góc độ chiến lược. Tập dữ liệu tình huống kỹ thuật đã được phê duyệt và kiểm chứng là loại dữ liệu không thể mua được trên thị trường và không có sẵn trong bất kỳ mô hình ngôn ngữ thương mại nào. Đây là yếu tố tạo khác biệt bền vững của đơn vị so với việc chỉ sử dụng công cụ AI phổ thông.</p>
+<hr>
+<h2 id="8-kiến-trúc-dữ-liệu-và-nhật-ký"><span class="secnum">8</span><span class="sectext">Kiến trúc dữ liệu và nhật ký</span></h2>
+<h3 id="81-mục-đích"><span class="secnum">8.1</span><span class="sectext">Mục đích</span></h3>
+<p>Hệ thống nhật ký (logging) trong phương án này phục vụ đồng thời hai yêu cầu khác nhau về bản chất:</p>
+<ol><li><strong>Yêu cầu vận hành và kiểm soát:</strong> truy vết nguyên nhân khi có sự cố, xác định trách nhiệm khi có tranh chấp về nội dung hồ sơ, đáp ứng yêu cầu kiểm toán nội bộ.</li><li><strong>Yêu cầu tích luỹ tri thức:</strong> nhật ký là nguồn dữ liệu đầu vào để hình thành kho tri thức tình huống và để đánh giá, cải thiện chất lượng hệ thống theo thời gian.</li></ol>
+<p>Yêu cầu thứ hai thường bị bỏ qua trong các dự án phần mềm thông thường. Trong phương án này, nhật ký được thiết kế ngay từ đầu như một thành phần dữ liệu nghiệp vụ, không phải như một tiện ích kỹ thuật phụ trợ.</p>
+<h3 id="82-ba-nhóm-nhật-ký"><span class="secnum">8.2</span><span class="sectext">Ba nhóm nhật ký</span></h3>
+<figure class="diagram"><div class="diagram-scroll"><pre class="mermaid">flowchart TD
+    A[&quot;Phien lam viec cua ky su&quot;] --&gt; B[&quot;Conversation Log&quot;]
+    A --&gt; C[&quot;Tool Execution Log&quot;]
+    A --&gt; D[&quot;Engineering Case Log&quot;]
+    B --&gt; E[&quot;PostgreSQL&quot;]
+    C --&gt; E
+    D --&gt; E
+    E --&gt; F[&quot;Bao cao van hanh&quot;]
+    E --&gt; G[&quot;Danh gia chat luong he thong&quot;]
+    E --&gt; H[&quot;Kho tri thuc tinh huong&quot;]</pre></div><figcaption>Sơ đồ 11</figcaption></figure>
+<h4 id="821-conversation-log-nhật-ký-hội-thoại"><span class="secnum">8.2.1</span><span class="sectext">Conversation Log — nhật ký hội thoại</span></h4>
+<p><strong>Mục đích:</strong> ghi nhận toàn bộ nội dung trao đổi giữa kỹ sư và hệ thống.</p>
+<p><strong>Cấu trúc dữ liệu chính:</strong></p>
+<div class="tablewrap"><table><thead><tr><th>Trường</th><th>Nội dung</th></tr></thead><tbody><tr><td><code>conversation_id</code></td><td>Định danh phiên trao đổi</td></tr><tr><td><code>user_ref</code></td><td>Định danh người dùng</td></tr><tr><td><code>project_ref</code></td><td>Dự án trong phạm vi phiên làm việc</td></tr><tr><td><code>question</code></td><td>Nội dung câu hỏi</td></tr><tr><td><code>answer</code></td><td>Nội dung trả lời</td></tr><tr><td><code>citations</code></td><td>Danh sách tài liệu và vị trí đã trích dẫn</td></tr><tr><td><code>retrieval_scores</code></td><td>Điểm liên quan của các đoạn tài liệu đã truy xuất</td></tr><tr><td><code>model_ref</code>, <code>model_version</code></td><td>Mô hình và phiên bản đã sử dụng</td></tr><tr><td><code>token_usage</code></td><td>Khối lượng xử lý, phục vụ theo dõi chi phí</td></tr><tr><td><code>latency_ms</code></td><td>Thời gian phản hồi</td></tr><tr><td><code>user_feedback</code></td><td>Đánh giá của người dùng về chất lượng trả lời</td></tr></tbody></table></div>
+<p><strong>Giá trị mang lại:</strong> cho phép xác định các nhóm câu hỏi hệ thống trả lời kém, các tài liệu thường được truy xuất nhưng không hữu ích, và các khoảng trống tri thức trong kho tài liệu. Đây là dữ liệu đầu vào trực tiếp cho công tác cải thiện chất lượng hệ thống.</p>
+<h4 id="822-tool-execution-log-nhật-ký-thực-thi-công-cụ"><span class="secnum">8.2.2</span><span class="sectext">Tool Execution Log — nhật ký thực thi công cụ</span></h4>
+<p><strong>Mục đích:</strong> ghi nhận mọi lời gọi công cụ nghiệp vụ do hệ thống thực hiện.</p>
+<p><strong>Cấu trúc dữ liệu chính:</strong></p>
+<div class="tablewrap"><table><thead><tr><th>Trường</th><th>Nội dung</th></tr></thead><tbody><tr><td><code>execution_id</code></td><td>Định danh lần thực thi</td></tr><tr><td><code>conversation_ref</code></td><td>Liên kết tới phiên trao đổi tương ứng</td></tr><tr><td><code>tool_name</code>, <code>tool_version</code></td><td>Công cụ và phiên bản đã gọi</td></tr><tr><td><code>input_params</code></td><td>Toàn bộ tham số đầu vào</td></tr><tr><td><code>output_result</code></td><td>Kết quả trả về</td></tr><tr><td><code>status</code></td><td>Trạng thái: thành công, lỗi, từ chối do thiếu quyền</td></tr><tr><td><code>permission_check</code></td><td>Kết quả kiểm tra phân quyền</td></tr><tr><td><code>duration_ms</code></td><td>Thời gian thực thi</td></tr><tr><td><code>executed_for_user</code></td><td>Danh tính người dùng mà lời gọi được thực hiện thay mặt</td></tr></tbody></table></div>
+<p><strong>Giá trị mang lại:</strong> đây là nhật ký có ý nghĩa pháp lý cao nhất trong hệ thống. Khi cần giải trình một con số trong hồ sơ, bản ghi này cho phép xác định chính xác công cụ nào, phiên bản nào, tham số nào đã tạo ra con số đó. Trường <code>tool_version</code> là bắt buộc: kết quả tính toán chỉ tái lập được khi biết phiên bản công cụ.</p>
+<h4 id="823-engineering-case-log-nhật-ký-tình-huống-kỹ-thuật"><span class="secnum">8.2.3</span><span class="sectext">Engineering Case Log — nhật ký tình huống kỹ thuật</span></h4>
+<p><strong>Mục đích:</strong> ghi nhận quyết định kỹ thuật cuối cùng và quá trình dẫn tới quyết định đó.</p>
+<p>Cấu trúc dữ liệu đã trình bày chi tiết tại Mục 7.4. Điểm cần lưu ý về mặt kiến trúc dữ liệu là nhóm nhật ký này liên kết tới hai nhóm còn lại thông qua các trường <code>conversation_ref</code> và <code>log_ref</code>, tạo thành một chuỗi truy vết hoàn chỉnh:</p>
+<figure class="diagram"><div class="diagram-scroll"><pre class="mermaid">flowchart LR
+    A[&quot;Engineering Case&quot;] --&gt; B[&quot;Conversation Log&quot;]
+    A --&gt; C[&quot;Tool Execution Log&quot;]
+    B --&gt; D[&quot;Cac doan tai lieu da truy xuat&quot;]
+    C --&gt; E[&quot;Tham so va ket qua tinh toan&quot;]</pre></div><figcaption>Sơ đồ 12</figcaption></figure>
+<p><strong>Giá trị mang lại:</strong> từ một quyết định kỹ thuật trong hồ sơ, có thể truy ngược tới toàn bộ căn cứ: câu hỏi ban đầu, tài liệu đã tham chiếu, công cụ đã chạy, tham số đã dùng, và người đã phê duyệt. Khả năng truy vết này là yêu cầu cơ bản đối với hồ sơ kỹ thuật và hiện chưa hệ thống nào trong đơn vị đáp ứng được.</p>
+<h3 id="83-mô-hình-dữ-liệu-tổng-thể"><span class="secnum">8.3</span><span class="sectext">Mô hình dữ liệu tổng thể</span></h3>
+<figure class="diagram"><div class="diagram-scroll"><pre class="mermaid">erDiagram
+    USER ||--o{ CONVERSATION : &quot;thuc hien&quot;
+    CONVERSATION ||--o{ MESSAGE : &quot;bao gom&quot;
+    MESSAGE ||--o{ CITATION : &quot;tham chieu&quot;
+    CONVERSATION ||--o{ TOOL_EXECUTION : &quot;phat sinh&quot;
+    TOOL_EXECUTION }o--|| TOOL : &quot;su dung&quot;
+    CONVERSATION ||--o{ ENGINEERING_CASE : &quot;sinh ra&quot;
+    ENGINEERING_CASE }o--|| PROJECT : &quot;thuoc&quot;
+    ENGINEERING_CASE ||--o{ CASE_APPROVAL : &quot;co&quot;
+    CITATION }o--|| DOCUMENT_CHUNK : &quot;tro toi&quot;
+    DOCUMENT_CHUNK }o--|| DOCUMENT : &quot;thuoc&quot;
+    DOCUMENT }o--|| DOCUMENT_TYPE : &quot;phan loai&quot;</pre></div><figcaption>Sơ đồ 13</figcaption></figure>
+<h3 id="84-chính-sách-lưu-trữ-và-bảo-vệ-dữ-liệu"><span class="secnum">8.4</span><span class="sectext">Chính sách lưu trữ và bảo vệ dữ liệu</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Nhóm dữ liệu</th><th>Thời hạn lưu trữ đề xuất</th><th>Ghi chú</th></tr></thead><tbody><tr><td>Conversation Log</td><td>24 tháng ở dạng đầy đủ, sau đó ẩn danh</td><td>Giữ nội dung kỹ thuật, loại bỏ định danh cá nhân</td></tr><tr><td>Tool Execution Log</td><td>Theo thời hạn lưu trữ hồ sơ dự án</td><td>Có giá trị giải trình, không được xoá trước thời hạn hồ sơ</td></tr><tr><td>Engineering Case</td><td>Không giới hạn</td><td>Là tài sản tri thức của đơn vị</td></tr><tr><td>Tài liệu gốc</td><td>Theo quy định lưu trữ hiện hành của đơn vị</td><td>Không thay đổi so với quy định hiện tại</td></tr></tbody></table></div>
+<p>Ba nguyên tắc bảo vệ dữ liệu được áp dụng:</p>
+<ol><li><strong>Mã hoá dữ liệu khi lưu trữ và khi truyền.</strong> Áp dụng cho toàn bộ dữ liệu, không phân biệt mức độ nhạy cảm.</li><li><strong>Phân tách theo dự án.</strong> Dữ liệu nhật ký mang định danh dự án và chịu cùng chính sách phân quyền truy cập như hồ sơ dự án.</li><li><strong>Kiểm soát truy cập nhật ký.</strong> Quyền đọc nhật ký được cấp riêng, không mặc định đi kèm quyền sử dụng hệ thống.</li></ol>
+<h3 id="85-chỉ-số-theo-dõi-vận-hành"><span class="secnum">8.5</span><span class="sectext">Chỉ số theo dõi vận hành</span></h3>
+<p>Hệ thống cần cung cấp báo cáo định kỳ cho bộ phận quản lý với các chỉ số sau:</p>
+<div class="tablewrap"><table><thead><tr><th>Nhóm chỉ số</th><th>Chỉ số cụ thể</th><th>Mục đích sử dụng</th></tr></thead><tbody><tr><td>Mức độ sử dụng</td><td>Số người dùng hoạt động, số câu hỏi theo bộ phận</td><td>Đánh giá mức độ tiếp nhận của người dùng</td></tr><tr><td>Chất lượng</td><td>Tỉ lệ câu trả lời có dẫn chứng, tỉ lệ phản hồi tích cực</td><td>Đánh giá hiệu quả của hệ thống truy xuất</td></tr><tr><td>Khoảng trống tri thức</td><td>Danh sách câu hỏi không tìm được căn cứ</td><td>Xác định tài liệu cần bổ sung</td></tr><tr><td>Tích luỹ tri thức</td><td>Số tình huống được phê duyệt theo tháng</td><td>Đo tốc độ hình thành tài sản tri thức</td></tr><tr><td>Chi phí</td><td>Chi phí xử lý theo tháng, chi phí trung bình một câu hỏi</td><td>Kiểm soát ngân sách vận hành</td></tr><tr><td>Hiệu năng</td><td>Thời gian phản hồi trung bình và phân vị 95</td><td>Bảo đảm trải nghiệm sử dụng</td></tr></tbody></table></div>
+<p>Nhóm chỉ số &quot;Khoảng trống tri thức&quot; có giá trị quản trị cao và thường bị bỏ qua: danh sách các câu hỏi mà hệ thống không trả lời được chính là danh sách các tài liệu mà đơn vị đang thiếu.</p>
+<hr>
+<h2 id="9-kiến-trúc-giao-diện-người-dùng"><span class="secnum">9</span><span class="sectext">Kiến trúc giao diện người dùng</span></h2>
+<h3 id="91-mục-đích"><span class="secnum">9.1</span><span class="sectext">Mục đích</span></h3>
+<p>Giao diện người dùng của hệ thống được thiết kế theo mô hình <strong>không gian làm việc kỹ thuật</strong> (AI Engineering Workspace), không theo mô hình cửa sổ trao đổi thông thường.</p>
+<p>Cơ sở của lựa chọn này: trong công việc kỹ thuật, câu trả lời chỉ có giá trị khi kỹ sư kiểm chứng được căn cứ của nó. Nếu việc kiểm chứng đòi hỏi mở nhiều cửa sổ và tra cứu thủ công, chi phí kiểm chứng sẽ vượt quá lợi ích và người dùng sẽ bỏ qua bước này. Khi đó nguyên tắc &quot;con người kiểm soát&quot; chỉ tồn tại trên tài liệu, không tồn tại trong vận hành thực tế.</p>
+<h3 id="92-bố-cục-ba-cột"><span class="secnum">9.2</span><span class="sectext">Bố cục ba cột</span></h3>
+<figure class="diagram"><div class="diagram-scroll"><pre class="mermaid">flowchart LR
+    subgraph LEFT[&quot;Cot trai — Nguon tri thuc&quot;]
+        L1[&quot;Cay tai lieu&quot;]
+        L2[&quot;Tinh huong lien quan&quot;]
+        L3[&quot;Bo loc pham vi tra cuu&quot;]
+    end
+    subgraph CENTER[&quot;Cot giua — Lam viec&quot;]
+        C1[&quot;Trao doi voi he thong&quot;]
+        C2[&quot;Buoc xu ly dang thuc hien&quot;]
+        C3[&quot;De xuat cho phe duyet&quot;]
+    end
+    subgraph RIGHT[&quot;Cot phai — Dan chung&quot;]
+        R1[&quot;Trich dan tai lieu&quot;]
+        R2[&quot;Tham so tinh toan&quot;]
+        R3[&quot;Ket qua kiem dinh&quot;]
+    end
+    LEFT --&gt; CENTER
+    CENTER --&gt; RIGHT</pre></div><figcaption>Sơ đồ 14</figcaption></figure>
+<h4 id="921-cột-trái-nguồn-tri-thức"><span class="secnum">9.2.1</span><span class="sectext">Cột trái — Nguồn tri thức</span></h4>
+<p><strong>Chức năng chính:</strong> hiển thị phạm vi tri thức mà hệ thống đang sử dụng và cho phép người dùng điều chỉnh phạm vi đó.</p>
+<p><strong>Thành phần:</strong></p>
+<div class="tablewrap"><table><thead><tr><th>Thành phần</th><th>Nội dung</th></tr></thead><tbody><tr><td>Cây tài liệu</td><td>Danh mục tài liệu theo phân loại, cho phép giới hạn phạm vi tra cứu</td></tr><tr><td>Tình huống liên quan</td><td>Danh sách tình huống kỹ thuật tương tự đã được phê duyệt</td></tr><tr><td>Bộ lọc phạm vi</td><td>Giới hạn theo dự án, theo loại tài liệu, theo hiệu lực thời gian</td></tr></tbody></table></div>
+<p><strong>Giá trị mang lại:</strong> người dùng kiểm soát được nguồn dữ liệu mà hệ thống sử dụng. Trong trường hợp câu trả lời không phù hợp, người dùng có thể thu hẹp phạm vi và yêu cầu xử lý lại thay vì chỉ đặt lại câu hỏi.</p>
+<h4 id="922-cột-giữa-không-gian-làm-việc"><span class="secnum">9.2.2</span><span class="sectext">Cột giữa — Không gian làm việc</span></h4>
+<p><strong>Chức năng chính:</strong> tiếp nhận yêu cầu, hiển thị tiến trình xử lý và trình bày đề xuất.</p>
+<p><strong>Yêu cầu thiết kế quan trọng:</strong> hệ thống phải hiển thị <strong>các bước xử lý đang thực hiện</strong>, ví dụ: &quot;Đang tra cứu tài liệu tiêu chuẩn&quot;, &quot;Đang tìm tình huống tương tự&quot;, &quot;Đang thực hiện kiểm tra khả năng chịu uốn&quot;. Việc hiển thị này không chỉ nhằm mục đích trải nghiệm sử dụng, mà là yêu cầu về tính minh bạch: người dùng cần biết hệ thống đã làm gì để tạo ra kết quả.</p>
+<p>Đề xuất được trình bày ở trạng thái <strong>chờ phê duyệt</strong>, với ba thao tác khả dụng: phê duyệt, điều chỉnh, hoặc bác bỏ kèm lý do.</p>
+<h4 id="923-cột-phải-dẫn-chứng-và-kiểm-định"><span class="secnum">9.2.3</span><span class="sectext">Cột phải — Dẫn chứng và kiểm định</span></h4>
+<p><strong>Chức năng chính:</strong> trình bày toàn bộ căn cứ của câu trả lời ở dạng có thể kiểm chứng trực tiếp.</p>
+<p><strong>Thành phần:</strong></p>
+<div class="tablewrap"><table><thead><tr><th>Thành phần</th><th>Nội dung</th></tr></thead><tbody><tr><td>Trích dẫn tài liệu</td><td>Đoạn văn bản gốc, tên tài liệu, số trang, điều khoản, ngày hiệu lực</td></tr><tr><td>Bảng tham số tính toán</td><td>Toàn bộ tham số đầu vào đã sử dụng, ở dạng có thể chỉnh sửa</td></tr><tr><td>Kết quả kiểm định</td><td>Kết quả, hệ số an toàn, tiêu chuẩn áp dụng, phiên bản công cụ</td></tr></tbody></table></div>
+<p><strong>Yêu cầu thiết kế quan trọng:</strong> bảng tham số phải cho phép chỉnh sửa và chạy lại. Khi kỹ sư không đồng ý với một tham số mà hệ thống đã tự xác định, thao tác cần thiết là sửa tham số đó và yêu cầu tính lại — không phải diễn đạt lại câu hỏi. Đây là điểm khác biệt cơ bản giữa một công cụ kỹ thuật và một giao diện trao đổi thông thường.</p>
+<h3 id="93-nguyên-tắc-thiết-kế-trải-nghiệm"><span class="secnum">9.3</span><span class="sectext">Nguyên tắc thiết kế trải nghiệm</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Nguyên tắc</th><th>Yêu cầu cụ thể</th></tr></thead><tbody><tr><td><strong>Tính minh bạch</strong></td><td>Hiển thị các bước xử lý; hiển thị nguồn dữ liệu; hiển thị mức độ tin cậy</td></tr><tr><td><strong>Dựa trên dẫn chứng</strong></td><td>Không hiển thị số liệu kỹ thuật nào không kèm nguồn hoặc kết quả công cụ</td></tr><tr><td><strong>Người dùng kiểm soát</strong></td><td>Cho phép sửa tham số, giới hạn phạm vi, chạy lại, bác bỏ</td></tr><tr><td><strong>Trạng thái rõ ràng</strong></td><td>Phân biệt trực quan giữa: đã kiểm định, chưa kiểm định, đã phê duyệt, bị bác</td></tr><tr><td><strong>Không gây hiểu nhầm về thẩm quyền</strong></td><td>Ngôn ngữ giao diện dùng &quot;đề xuất&quot;, &quot;tham khảo&quot;, không dùng &quot;kết luận&quot;, &quot;quyết định&quot;</td></tr></tbody></table></div>
+<p>Nguyên tắc cuối cùng cần được kiểm soát chặt trong quá trình thiết kế nội dung giao diện. Cách dùng từ trong giao diện ảnh hưởng trực tiếp tới cách người dùng hiểu về vai trò của hệ thống.</p>
+<h3 id="94-yêu-cầu-phi-chức-năng-đối-với-giao-diện"><span class="secnum">9.4</span><span class="sectext">Yêu cầu phi chức năng đối với giao diện</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Yêu cầu</th><th>Mức đề xuất</th><th>Cơ sở</th></tr></thead><tbody><tr><td>Thời gian hiển thị phản hồi đầu tiên</td><td>Dưới 3 giây</td><td>Duy trì cảm nhận về tính tương tác</td></tr><tr><td>Thời gian hoàn tất câu trả lời có gọi công cụ</td><td>Dưới 30 giây</td><td>Phù hợp với thời gian chờ chấp nhận được trong công việc kỹ thuật</td></tr><tr><td>Hỗ trợ trình duyệt</td><td>Các phiên bản hiện hành của trình duyệt phổ biến</td><td>Không phát sinh yêu cầu cài đặt phần mềm</td></tr><tr><td>Khả năng sử dụng trên màn hình lớn</td><td>Tối ưu cho độ phân giải từ 1920×1080</td><td>Phù hợp môi trường làm việc kỹ thuật</td></tr><tr><td>Xuất dữ liệu</td><td>Xuất đề xuất và dẫn chứng thành tệp phục vụ đính kèm hồ sơ</td><td>Yêu cầu nghiệp vụ trực tiếp</td></tr></tbody></table></div>
+<p>Yêu cầu cuối cùng có tác động lớn tới mức độ tiếp nhận của người dùng: khi kết quả từ hệ thống có thể đưa thẳng vào hồ sơ dưới dạng phụ lục, hệ thống trở thành một phần của quy trình làm việc thay vì một công cụ tra cứu bên ngoài.</p>
+<hr>
+<h2 id="10-đề-xuất-technology-stack"><span class="secnum">10</span><span class="sectext">Đề xuất technology stack</span></h2>
+<h3 id="101-nguyên-tắc-lựa-chọn-công-nghệ"><span class="secnum">10.1</span><span class="sectext">Nguyên tắc lựa chọn công nghệ</span></h3>
+<p>Phương án công nghệ được lựa chọn theo bốn tiêu chí, xếp theo thứ tự ưu tiên:</p>
+<ol><li><strong>Khả năng vận hành với đội ngũ hiện có.</strong> Công nghệ tối ưu về mặt kỹ thuật nhưng không có người vận hành được là công nghệ không phù hợp.</li><li><strong>Mức độ phổ biến trên thị trường lao động.</strong> Bảo đảm khả năng tuyển dụng và thay thế nhân sự.</li><li><strong>Chi phí vận hành theo quy mô thực tế.</strong> Ưu tiên các thành phần có chi phí tăng theo mức sử dụng, tránh chi phí cố định lớn ở giai đoạn đầu.</li><li><strong>Khả năng thay thế.</strong> Hạn chế phụ thuộc vào một nhà cung cấp duy nhất ở các thành phần cốt lõi.</li></ol>
+<h3 id="102-danh-mục-công-nghệ-đề-xuất"><span class="secnum">10.2</span><span class="sectext">Danh mục công nghệ đề xuất</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Lớp</th><th>Thành phần</th><th>Công nghệ đề xuất</th><th>Cơ sở lựa chọn</th></tr></thead><tbody><tr><td>Giao diện</td><td>Web application</td><td>React, TypeScript</td><td>Phổ biến, hệ sinh thái thư viện đầy đủ, dễ tuyển dụng</td></tr><tr><td>Giao diện</td><td>Hệ thống giao diện</td><td>Tailwind CSS kèm bộ component nội bộ</td><td>Bảo đảm tính nhất quán, giảm chi phí phát triển giao diện</td></tr><tr><td>Ứng dụng</td><td>API và Agent Runtime</td><td>Node.js, TypeScript</td><td>Dùng chung ngôn ngữ với giao diện; hệ sinh thái thư viện AI đầy đủ</td></tr><tr><td>Ứng dụng</td><td>Dịch vụ nghiệp vụ</td><td>Node.js hoặc Python tuỳ đặc thù</td><td>Python phù hợp hơn cho các module tính toán kỹ thuật</td></tr><tr><td>AI</td><td>Mô hình ngôn ngữ</td><td>AWS Bedrock, mô hình Claude</td><td>Vận hành trong tài khoản của đơn vị; dữ liệu không dùng để huấn luyện</td></tr><tr><td>AI</td><td>Mô hình embedding</td><td>Dịch vụ embedding trên Bedrock</td><td>Đồng nhất hạ tầng, giảm số nhà cung cấp</td></tr><tr><td>Dữ liệu</td><td>Cơ sở dữ liệu quan hệ</td><td>PostgreSQL</td><td>Ổn định, chi phí thấp, đáp ứng đầy đủ yêu cầu nghiệp vụ</td></tr><tr><td>Dữ liệu</td><td>Lưu trữ vector</td><td>pgvector giai đoạn đầu; OpenSearch khi mở rộng</td><td>Giảm số hệ thống phải vận hành ở giai đoạn đầu</td></tr><tr><td>Dữ liệu</td><td>Lưu trữ tệp</td><td>Amazon S3</td><td>Chi phí thấp, độ bền cao, tích hợp sẵn với hạ tầng AWS</td></tr><tr><td>Hạ tầng</td><td>Nền tảng triển khai</td><td>Amazon ECS (Fargate)</td><td>Không phải vận hành máy chủ; phù hợp quy mô của đơn vị</td></tr><tr><td>Hạ tầng</td><td>Quản lý hạ tầng</td><td>Infrastructure as Code</td><td>Bảo đảm khả năng tái lập môi trường</td></tr><tr><td>Vận hành</td><td>Giám sát</td><td>Amazon CloudWatch kèm cảnh báo</td><td>Tích hợp sẵn, không phát sinh hệ thống mới</td></tr></tbody></table></div>
+<h3 id="103-cơ-sở-của-một-số-lựa-chọn-cần-giải-trình"><span class="secnum">10.3</span><span class="sectext">Cơ sở của một số lựa chọn cần giải trình</span></h3>
+<p><strong>Về việc dùng chung TypeScript cho giao diện và tầng ứng dụng.</strong> Lựa chọn này giảm số ngôn ngữ mà đội phát triển phải thành thạo, cho phép dùng chung định nghĩa kiểu dữ liệu giữa hai tầng, qua đó giảm lỗi phát sinh do sai lệch cấu trúc dữ liệu. Với quy mô đội ngũ dự kiến, đây là yếu tố có tác động rõ rệt tới năng suất.</p>
+<p><strong>Về việc tách riêng dịch vụ tính toán bằng Python.</strong> Các module tính toán kỹ thuật thường cần thư viện tính toán số học chuyên dụng và cần được kỹ sư kết cấu tham gia kiểm tra logic. Python phù hợp hơn cho mục đích này. Việc tách riêng cũng cho phép áp dụng quy trình kiểm thử nghiêm ngặt hơn cho phần tính toán so với phần còn lại của hệ thống.</p>
+<p><strong>Về Amazon ECS thay vì Kubernetes.</strong> Kubernetes cung cấp khả năng linh hoạt cao hơn nhưng đòi hỏi năng lực vận hành chuyên biệt. Với quy mô dự kiến, chi phí vận hành Kubernetes không được bù đắp bởi lợi ích tương ứng. Trường hợp quy mô hệ thống tăng đáng kể hoặc đơn vị có sẵn năng lực vận hành Kubernetes, có thể xem xét lại lựa chọn này.</p>
+<p><strong>Về điểm chuyển đổi từ pgvector sang OpenSearch.</strong> Đề xuất chuyển đổi khi đạt một trong các điều kiện sau: (a) số lượng đoạn văn bản vượt 1.000.000; (b) thời gian truy xuất phân vị 95 vượt 500 ms; (c) phát sinh yêu cầu tìm kiếm nâng cao mà pgvector không đáp ứng. Trước khi đạt các ngưỡng này, việc bổ sung một hệ thống lưu trữ thứ hai làm tăng chi phí vận hành mà không mang lại lợi ích tương ứng.</p>
+<h3 id="104-yêu-cầu-phi-chức-năng-của-hệ-thống"><span class="secnum">10.4</span><span class="sectext">Yêu cầu phi chức năng của hệ thống</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Nhóm yêu cầu</th><th>Chỉ tiêu đề xuất</th></tr></thead><tbody><tr><td>Tính sẵn sàng</td><td>99,5% trong giờ làm việc</td></tr><tr><td>Hiệu năng</td><td>Thời gian phản hồi đầu tiên dưới 3 giây; hoàn tất câu trả lời có gọi công cụ dưới 30 giây</td></tr><tr><td>Khả năng mở rộng</td><td>Đáp ứng 200 người dùng đồng thời mà không thay đổi kiến trúc</td></tr><tr><td>Sao lưu</td><td>Sao lưu cơ sở dữ liệu hằng ngày, lưu 30 bản; kiểm tra khôi phục định kỳ hằng quý</td></tr><tr><td>Khôi phục sau sự cố</td><td>Thời gian khôi phục mục tiêu (RTO) dưới 4 giờ; điểm khôi phục mục tiêu (RPO) dưới 24 giờ</td></tr><tr><td>Nhật ký</td><td>Lưu trữ theo chính sách tại Mục 8.4</td></tr></tbody></table></div>
+<hr>
+<h2 id="11-kiến-trúc-mcp"><span class="secnum">11</span><span class="sectext">Kiến trúc MCP</span></h2>
+<h3 id="111-mục-đích"><span class="secnum">11.1</span><span class="sectext">Mục đích</span></h3>
+<p>Giao thức kết nối công cụ AI (Model Context Protocol - MCP) là một chuẩn giao tiếp cho phép các ứng dụng AI khác nhau sử dụng chung một bộ công cụ nghiệp vụ, mà không cần mỗi ứng dụng tự xây dựng lại phần tích hợp.</p>
+<p>Trong phương án kiến trúc này, MCP được đưa vào nhằm giải quyết một yêu cầu cụ thể: <strong>bảo toàn giá trị đầu tư vào tầng dịch vụ nghiệp vụ</strong>. Phần lớn khối lượng công việc của dự án nằm ở việc xây dựng và kiểm chứng các công cụ tính toán, kiểm định và truy vấn dữ liệu. Nếu các công cụ này chỉ sử dụng được bởi một ứng dụng duy nhất, thì mỗi lần đơn vị triển khai một ứng dụng AI mới sẽ phát sinh chi phí tích hợp lại từ đầu.</p>
+<h3 id="112-chức-năng-chính"><span class="secnum">11.2</span><span class="sectext">Chức năng chính</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Chức năng</th><th>Mô tả</th></tr></thead><tbody><tr><td>Công bố danh mục công cụ</td><td>Cung cấp cho ứng dụng AI danh sách công cụ khả dụng kèm mô tả tham số</td></tr><tr><td>Chuyển đổi giao thức</td><td>Chuyển yêu cầu theo chuẩn MCP thành lời gọi API nghiệp vụ nội bộ</td></tr><tr><td>Xác thực và phân quyền</td><td>Xác định danh tính ứng dụng gọi và người dùng cuối, kiểm tra quyền tương ứng</td></tr><tr><td>Ghi nhật ký</td><td>Ghi nhận mọi lời gọi qua MCP theo cùng chuẩn nhật ký của hệ thống chính</td></tr></tbody></table></div>
+<h3 id="113-luồng-hoạt-động"><span class="secnum">11.3</span><span class="sectext">Luồng hoạt động</span></h3>
+<figure class="diagram"><div class="diagram-scroll"><pre class="mermaid">flowchart TD
+    A[&quot;Ung dung AI noi bo&quot;] --&gt; M[&quot;MCP Server&quot;]
+    B[&quot;Cong cu AI tren may tram ky su&quot;] --&gt; M
+    C[&quot;Ung dung AI trien khai trong tuong lai&quot;] --&gt; M
+    M --&gt; P[&quot;Tool Permission Layer&quot;]
+    P --&gt; S[&quot;Engineering Business Services&quot;]
+    S --&gt; D1[&quot;Calculation Engine&quot;]
+    S --&gt; D2[&quot;Co so du lieu du an&quot;]
+    S --&gt; D3[&quot;He thong mo phong&quot;]
+    M --&gt; L[&quot;Logging Service&quot;]</pre></div><figcaption>Sơ đồ 15</figcaption></figure>
+<p>Điểm cần lưu ý trong sơ đồ: MCP Server <strong>không kết nối trực tiếp</strong> tới cơ sở dữ liệu hoặc hệ thống mô phỏng. Mọi lời gọi đều đi qua tầng phân quyền và tầng dịch vụ nghiệp vụ, giống hệt đường đi của Agent Runtime trong ứng dụng chính.</p>
+<h3 id="114-nguyên-tắc-phân-định-trách-nhiệm"><span class="secnum">11.4</span><span class="sectext">Nguyên tắc phân định trách nhiệm</span></h3>
+<p><strong>Yêu cầu bắt buộc: không đặt logic nghiệp vụ trong MCP Server.</strong></p>
+<p>MCP Server chỉ thực hiện các nhiệm vụ sau: tiếp nhận yêu cầu theo chuẩn MCP, ánh xạ sang lời gọi API nội bộ, chuyển tiếp kết quả, và ghi nhật ký. Toàn bộ logic tính toán, quy tắc nghiệp vụ và ràng buộc kỹ thuật nằm trong tầng dịch vụ nghiệp vụ.</p>
+<p>Cơ sở của yêu cầu này:</p>
+<div class="tablewrap"><table><thead><tr><th>Rủi ro nếu vi phạm</th><th>Hệ quả</th></tr></thead><tbody><tr><td>Logic tồn tại ở hai nơi</td><td>Ứng dụng web và MCP cho kết quả khác nhau cho cùng một bài toán</td></tr><tr><td>Kiểm thử phân tán</td><td>Phải duy trì hai bộ kiểm thử cho cùng một quy tắc nghiệp vụ</td></tr><tr><td>Cập nhật không đồng bộ</td><td>Sửa quy tắc ở một nơi, quên nơi còn lại</td></tr><tr><td>Kiểm soát chất lượng suy giảm</td><td>Không xác định được đâu là nguồn tham chiếu chính thức của một công thức</td></tr></tbody></table></div>
+<p>Trong lĩnh vực kỹ thuật, hệ quả thứ nhất là không chấp nhận được: cùng một bài toán kết cấu không thể cho hai kết quả khác nhau tuỳ theo công cụ được sử dụng.</p>
+<h3 id="115-lộ-trình-áp-dụng-mcp"><span class="secnum">11.5</span><span class="sectext">Lộ trình áp dụng MCP</span></h3>
+<p>MCP không được triển khai ở giai đoạn đầu. Thứ tự đề xuất:</p>
+<div class="tablewrap"><table><thead><tr><th>Giai đoạn</th><th>Trạng thái MCP</th><th>Cơ sở</th></tr></thead><tbody><tr><td>Giai đoạn 1–2</td><td>Chưa triển khai; tầng dịch vụ nghiệp vụ được thiết kế sẵn theo hướng độc lập với ứng dụng gọi</td><td>Ưu tiên đưa hệ thống chính vào vận hành</td></tr><tr><td>Giai đoạn 3</td><td>Chuẩn bị: rà soát và chuẩn hoá mô tả tham số của các công cụ</td><td>Bảo đảm chất lượng mô tả trước khi công bố ra ngoài</td></tr><tr><td>Giai đoạn 4</td><td>Triển khai MCP Server cho nhóm công cụ chỉ đọc và nhóm tính toán</td><td>Mở rộng phạm vi sử dụng với mức rủi ro thấp</td></tr></tbody></table></div>
+<p>Việc thiết kế tầng dịch vụ nghiệp vụ độc lập với ứng dụng gọi cần được thực hiện <strong>ngay từ giai đoạn 1</strong>, kể cả khi MCP chưa được triển khai. Đây là yêu cầu về kiến trúc, không phải yêu cầu về tính năng: nếu tầng dịch vụ được xây dựng gắn chặt với ứng dụng web, việc bổ sung MCP về sau sẽ phải viết lại phần lớn tầng này.</p>
+<h3 id="116-giá-trị-mang-lại"><span class="secnum">11.6</span><span class="sectext">Giá trị mang lại</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Khía cạnh</th><th>Giá trị</th></tr></thead><tbody><tr><td>Khả năng tái sử dụng</td><td>Bộ công cụ nghiệp vụ dùng được cho nhiều ứng dụng AI khác nhau</td></tr><tr><td>Khả năng mở rộng</td><td>Bổ sung ứng dụng AI mới không phát sinh chi phí tích hợp lại</td></tr><tr><td>Giảm phụ thuộc nhà cung cấp</td><td>Khi thay đổi nền tảng AI, tầng công cụ giữ nguyên</td></tr><tr><td>Kiểm soát tập trung</td><td>Mọi ứng dụng AI đều đi qua cùng một tầng phân quyền và nhật ký</td></tr></tbody></table></div>
+<hr>
+<h2 id="12-kiến-trúc-bảo-mật"><span class="secnum">12</span><span class="sectext">Kiến trúc bảo mật</span></h2>
+<h3 id="121-mục-đích-và-phạm-vi"><span class="secnum">12.1</span><span class="sectext">Mục đích và phạm vi</span></h3>
+<p>Hệ thống lưu trữ và xử lý tài liệu kỹ thuật nội bộ, hồ sơ dự án và dữ liệu thiết kế — trong đó một phần chịu ràng buộc bảo mật với chủ đầu tư. Kiến trúc bảo mật được thiết kế nhằm bảo đảm ba yêu cầu: dữ liệu chỉ được truy cập bởi người có thẩm quyền; mọi hành động của hệ thống đều được ghi nhận; và phạm vi hành động của thành phần AI được giới hạn ở mức đã được phê duyệt.</p>
+<h3 id="122-nguyên-tắc-bảo-mật"><span class="secnum">12.2</span><span class="sectext">Nguyên tắc bảo mật</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Nguyên tắc</th><th>Nội dung áp dụng</th></tr></thead><tbody><tr><td><strong>Thành phần AI không truy cập trực tiếp dữ liệu</strong></td><td>Mọi truy cập đi qua công cụ đã đăng ký và tầng phân quyền</td></tr><tr><td><strong>Phân quyền theo người dùng cuối</strong></td><td>Quyền được kiểm tra theo danh tính người dùng, không theo danh tính hệ thống</td></tr><tr><td><strong>Quyền tối thiểu</strong></td><td>Mỗi thành phần chỉ được cấp quyền đủ cho chức năng của nó</td></tr><tr><td><strong>Ghi nhật ký đầy đủ</strong></td><td>Mọi lời gọi công cụ và mọi truy xuất dữ liệu đều được ghi nhận</td></tr><tr><td><strong>Con người phê duyệt</strong></td><td>Không có hành động nào tác động tới hồ sơ chính thức được thực hiện tự động</td></tr><tr><td><strong>Từ chối mặc định</strong></td><td>Yêu cầu không xác định được quyền sẽ bị từ chối, không được cho qua</td></tr></tbody></table></div>
+<h3 id="123-kiến-trúc-phân-lớp-kiểm-soát"><span class="secnum">12.3</span><span class="sectext">Kiến trúc phân lớp kiểm soát</span></h3>
+<figure class="diagram"><div class="diagram-scroll"><pre class="mermaid">flowchart TD
+    U[&quot;Ky su&quot;] --&gt; AUTH[&quot;Lop xac thuc va phan quyen&quot;]
+    AUTH --&gt; AGENT[&quot;AI Agent Runtime&quot;]
+    AGENT --&gt; TOOL[&quot;Tool Permission Layer&quot;]
+    TOOL --&gt; SVC[&quot;Business Service&quot;]
+    SVC --&gt; DB[&quot;Co so du lieu&quot;]
+    AUTH -.-&gt; AUDIT[&quot;Audit Log&quot;]
+    TOOL -.-&gt; AUDIT
+    SVC -.-&gt; AUDIT</pre></div><figcaption>Sơ đồ 16</figcaption></figure>
+<p>Mô tả chức năng kiểm soát tại từng lớp:</p>
+<div class="tablewrap"><table><thead><tr><th>Lớp</th><th>Nội dung kiểm soát</th><th>Rủi ro được ngăn chặn</th></tr></thead><tbody><tr><td>Xác thực và phân quyền</td><td>Xác định danh tính, phạm vi dự án, vai trò</td><td>Truy cập trái phép vào hệ thống</td></tr><tr><td>AI Agent Runtime</td><td>Giới hạn tập công cụ khả dụng theo vai trò người dùng</td><td>Thành phần AI thực hiện hành động ngoài phạm vi thiết kế</td></tr><tr><td>Tool Permission Layer</td><td>Kiểm tra quyền theo từng lời gọi và từng đối tượng dữ liệu</td><td>Truy cập dữ liệu của dự án không thuộc thẩm quyền</td></tr><tr><td>Business Service</td><td>Xác thực tham số, áp dụng ràng buộc nghiệp vụ</td><td>Dữ liệu không hợp lệ, thao tác sai quy tắc</td></tr><tr><td>Cơ sở dữ liệu</td><td>Phân quyền ở mức tài khoản kết nối, mã hoá dữ liệu</td><td>Truy cập trực tiếp vượt cấp</td></tr></tbody></table></div>
+<h3 id="124-mô-hình-phân-quyền"><span class="secnum">12.4</span><span class="sectext">Mô hình phân quyền</span></h3>
+<p>Đề xuất áp dụng mô hình phân quyền theo vai trò kết hợp phạm vi dự án:</p>
+<div class="tablewrap"><table><thead><tr><th>Vai trò</th><th>Phạm vi dữ liệu</th><th>Nhóm công cụ được phép</th></tr></thead><tbody><tr><td>Kỹ sư thiết kế</td><td>Các dự án được phân công</td><td>Nhóm A (chỉ đọc), Nhóm B (tính toán)</td></tr><tr><td>Chủ trì bộ môn</td><td>Toàn bộ dự án thuộc bộ môn</td><td>Nhóm A, B; quyền phê duyệt tình huống</td></tr><tr><td>Quản lý kỹ thuật</td><td>Toàn đơn vị</td><td>Nhóm A, B; quyền xem báo cáo tổng hợp</td></tr><tr><td>Quản trị hệ thống</td><td>Không truy cập nội dung hồ sơ</td><td>Quản trị người dùng, quản trị tài liệu</td></tr><tr><td>Ứng dụng AI qua MCP</td><td>Theo danh tính người dùng cuối được uỷ quyền</td><td>Theo cấu hình từng ứng dụng</td></tr></tbody></table></div>
+<p>Vai trò quản trị hệ thống được thiết kế <strong>không bao gồm quyền đọc nội dung hồ sơ dự án</strong>. Đây là biện pháp phân tách trách nhiệm nhằm hạn chế rủi ro từ tài khoản có đặc quyền cao.</p>
+<h3 id="125-kiểm-soát-rủi-ro-đặc-thù-của-hệ-thống-ai"><span class="secnum">12.5</span><span class="sectext">Kiểm soát rủi ro đặc thù của hệ thống AI</span></h3>
+<p>Ngoài các biện pháp bảo mật thông thường, hệ thống có ba nhóm rủi ro đặc thù cần kiểm soát:</p>
+<p><strong>Rủi ro can thiệp qua nội dung đầu vào (prompt injection).</strong> Tài liệu hoặc dữ liệu đưa vào ngữ cảnh xử lý có thể chứa nội dung được soạn nhằm tác động tới hành vi của thành phần AI. Biện pháp kiểm soát: phân tách rõ giữa chỉ thị hệ thống và nội dung tài liệu trong ngữ cảnh xử lý; giới hạn tập công cụ khả dụng; yêu cầu xác nhận của người dùng đối với mọi công cụ có tác động ghi dữ liệu.</p>
+<p><strong>Rủi ro rò rỉ dữ liệu qua ngữ cảnh xử lý.</strong> Nội dung đưa vào ngữ cảnh có thể xuất hiện trong câu trả lời. Biện pháp kiểm soát: lọc quyền truy cập <strong>trước</strong> khi đưa nội dung vào ngữ cảnh, không lọc ở khâu hiển thị kết quả.</p>
+<p><strong>Rủi ro sử dụng kết quả chưa kiểm chứng.</strong> Người dùng có thể sử dụng đề xuất của hệ thống mà không thực hiện kiểm chứng. Biện pháp kiểm soát: phân biệt trực quan giữa nội dung đã kiểm định và chưa kiểm định; yêu cầu thao tác phê duyệt trước khi xuất dữ liệu phục vụ hồ sơ; ghi nhận danh tính người phê duyệt.</p>
+<h3 id="126-yêu-cầu-đối-với-nhà-cung-cấp-dịch-vụ-mô-hình"><span class="secnum">12.6</span><span class="sectext">Yêu cầu đối với nhà cung cấp dịch vụ mô hình</span></h3>
+<p>Trước khi triển khai, cần xác nhận bằng văn bản các nội dung sau với nhà cung cấp dịch vụ mô hình ngôn ngữ:</p>
+<div class="tablewrap"><table><thead><tr><th>Nội dung cần xác nhận</th><th>Yêu cầu</th></tr></thead><tbody><tr><td>Sử dụng dữ liệu</td><td>Dữ liệu gửi tới dịch vụ không được sử dụng để huấn luyện mô hình</td></tr><tr><td>Lưu trữ dữ liệu</td><td>Không lưu trữ nội dung yêu cầu ngoài thời gian xử lý, hoặc lưu trong phạm vi tài khoản của đơn vị</td></tr><tr><td>Vùng triển khai</td><td>Xác định vùng địa lý xử lý dữ liệu</td></tr><tr><td>Mã hoá đường truyền</td><td>Bắt buộc trên toàn bộ kết nối</td></tr><tr><td>Chứng chỉ tuân thủ</td><td>Cung cấp các chứng chỉ tuân thủ hiện có</td></tr></tbody></table></div>
+<p>Nội dung này cần được rà soát cùng bộ phận pháp chế trước khi ký kết, đặc biệt trong trường hợp hồ sơ dự án có ràng buộc bảo mật với chủ đầu tư.</p>
+<hr>
+<h2 id="13-lộ-trình-triển-khai"><span class="secnum">13</span><span class="sectext">Lộ trình triển khai</span></h2>
+<h3 id="131-nguyên-tắc-xây-dựng-lộ-trình"><span class="secnum">13.1</span><span class="sectext">Nguyên tắc xây dựng lộ trình</span></h3>
+<p>Lộ trình được xây dựng theo bốn giai đoạn, mỗi giai đoạn đáp ứng ba điều kiện: có sản phẩm đưa vào sử dụng được; có tiêu chí kết thúc đo lường được; và có thể dừng lại sau giai đoạn đó mà phần đã đầu tư vẫn phát huy giá trị.</p>
+<p>Các con số về thời lượng và nhân sự dưới đây là ước lượng ở mức đề xuất chủ trương, cần được chuẩn xác lại trong bước lập kế hoạch chi tiết.</p>
+<h3 id="132-giai-đoạn-1-hỏi-đáp-tài-liệu-nội-bộ"><span class="secnum">13.2</span><span class="sectext">Giai đoạn 1 — Hỏi đáp tài liệu nội bộ</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Nội dung</th><th>Mô tả</th></tr></thead><tbody><tr><td><strong>Thời lượng</strong></td><td>3 tháng</td></tr><tr><td><strong>Mục tiêu</strong></td><td>Đưa vào vận hành hệ thống hỏi đáp dựa trên tài liệu nội bộ, có dẫn chứng đầy đủ</td></tr><tr><td><strong>Phạm vi tài liệu</strong></td><td>Tiêu chuẩn áp dụng, quy trình nội bộ, sổ tay kỹ thuật; ước tính 300–500 tài liệu</td></tr><tr><td><strong>Thành phần kỹ thuật</strong></td><td>Web UI cơ bản, API Gateway, RAG Service, Vector Database, tích hợp Bedrock, Conversation Log</td></tr><tr><td><strong>Nhân sự đề xuất</strong></td><td>1 kiến trúc sư giải pháp (bán thời gian), 2 kỹ sư backend, 1 kỹ sư frontend, 1 kỹ sư dữ liệu; phía nghiệp vụ: 1 chủ trì kỹ thuật tham gia 30% thời gian</td></tr><tr><td><strong>Chi phí hạ tầng</strong></td><td>Ở mức vài trăm USD mỗi tháng cho môi trường phát triển và thử nghiệm</td></tr><tr><td><strong>Tiêu chí kết thúc</strong></td><td>Tối thiểu 20 kỹ sư sử dụng thường xuyên trong 4 tuần liên tục; tỉ lệ câu trả lời có dẫn chứng đúng đạt ngưỡng do bộ phận kỹ thuật xác định trên bộ câu hỏi kiểm tra</td></tr><tr><td><strong>Giá trị đạt được</strong></td><td>Giảm thời gian tra cứu tài liệu; hình thành số liệu nền phục vụ đánh giá các giai đoạn sau</td></tr></tbody></table></div>
+<p><strong>Công việc bắt buộc trong giai đoạn này:</strong> đo số liệu nền về thời gian tra cứu hiện tại, và xây dựng bộ câu hỏi kiểm tra gồm 100–200 câu hỏi thực tế kèm đáp án do kỹ sư xác nhận. Bộ câu hỏi này là công cụ đánh giá chất lượng cho toàn bộ các giai đoạn tiếp theo.</p>
+<h3 id="133-giai-đoạn-2-tích-hợp-công-cụ-tính-toán"><span class="secnum">13.3</span><span class="sectext">Giai đoạn 2 — Tích hợp công cụ tính toán</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Nội dung</th><th>Mô tả</th></tr></thead><tbody><tr><td><strong>Thời lượng</strong></td><td>3–4 tháng</td></tr><tr><td><strong>Mục tiêu</strong></td><td>Hệ thống thực hiện được các phép kiểm tra kỹ thuật thông qua công cụ đã chuẩn hoá</td></tr><tr><td><strong>Phạm vi công cụ</strong></td><td>3–5 công cụ được lựa chọn theo tần suất sử dụng thực tế</td></tr><tr><td><strong>Thành phần kỹ thuật</strong></td><td>Agent Runtime, Tool Registry, Tool Executor, Tool Permission Layer, Calculation Engine, Tool Execution Log</td></tr><tr><td><strong>Nhân sự đề xuất</strong></td><td>Giữ nguyên đội giai đoạn 1, bổ sung 1 kỹ sư phát triển module tính toán; phía nghiệp vụ: 1 kỹ sư kết cấu tham gia 50% thời gian để xác nhận logic tính toán</td></tr><tr><td><strong>Tiêu chí kết thúc</strong></td><td>Tối thiểu 3 công cụ vận hành ổn định; kết quả tính toán khớp với kết quả tính tay đã được xác nhận trên toàn bộ bộ ca kiểm thử</td></tr><tr><td><strong>Giá trị đạt được</strong></td><td>Chuẩn hoá công cụ tính toán trong đơn vị; kết quả có khả năng tái lập và truy vết</td></tr></tbody></table></div>
+<p><strong>Rủi ro chính của giai đoạn:</strong> việc chuyển các bảng tính hiện có thành module tính toán chuẩn hoá thường phát hiện ra sai lệch giữa các phiên bản đang lưu hành. Cần dự trù thời gian cho việc rà soát và thống nhất công thức — đây là công việc nghiệp vụ, không phải công việc lập trình.</p>
+<h3 id="134-giai-đoạn-3-hệ-thống-tri-thức-tình-huống-kỹ-thuật"><span class="secnum">13.4</span><span class="sectext">Giai đoạn 3 — Hệ thống tri thức tình huống kỹ thuật</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Nội dung</th><th>Mô tả</th></tr></thead><tbody><tr><td><strong>Thời lượng</strong></td><td>4–5 tháng</td></tr><tr><td><strong>Mục tiêu</strong></td><td>Hình thành kho tri thức tình huống và đưa cơ chế tra cứu tiền lệ vào vận hành</td></tr><tr><td><strong>Thành phần kỹ thuật</strong></td><td>Case Knowledge Service, cơ chế ghi nhận trong luồng, cơ chế tra cứu tương tự, Engineering Case Log, giao diện phê duyệt</td></tr><tr><td><strong>Nhân sự đề xuất</strong></td><td>Đội kỹ thuật giai đoạn 2; phía nghiệp vụ: nhóm 3–5 kỹ sư tham gia số hoá tình huống lịch sử theo đợt</td></tr><tr><td><strong>Tiêu chí kết thúc</strong></td><td>Tối thiểu 300 tình huống ở trạng thái đã phê duyệt; tỉ lệ câu hỏi được giải quyết có tham chiếu tiền lệ đạt mức do bộ phận kỹ thuật xác định</td></tr><tr><td><strong>Giá trị đạt được</strong></td><td>Hình thành tài sản tri thức thuộc sở hữu đơn vị; tăng tính nhất quán trong thiết kế</td></tr></tbody></table></div>
+<p><strong>Điều kiện tiên quyết:</strong> giai đoạn này chỉ nên triển khai khi giai đoạn 2 đã vận hành ổn định, vì bản ghi tình huống phụ thuộc vào kết quả kiểm định do công cụ tính toán tạo ra. Triển khai trước sẽ tạo ra các bản ghi thiếu trường <code>verification</code>, không sử dụng được làm tiền lệ.</p>
+<h3 id="135-giai-đoạn-4-mở-rộng-hệ-sinh-thái-công-cụ"><span class="secnum">13.5</span><span class="sectext">Giai đoạn 4 — Mở rộng hệ sinh thái công cụ</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Nội dung</th><th>Mô tả</th></tr></thead><tbody><tr><td><strong>Thời lượng</strong></td><td>3 tháng</td></tr><tr><td><strong>Mục tiêu</strong></td><td>Công bố bộ công cụ nghiệp vụ theo chuẩn MCP; mở rộng phạm vi ứng dụng</td></tr><tr><td><strong>Thành phần kỹ thuật</strong></td><td>MCP Server, chuẩn hoá mô tả công cụ, cơ chế phân quyền cho ứng dụng bên ngoài</td></tr><tr><td><strong>Nhân sự đề xuất</strong></td><td>2 kỹ sư backend, 1 kỹ sư vận hành</td></tr><tr><td><strong>Tiêu chí kết thúc</strong></td><td>Bộ công cụ được sử dụng bởi tối thiểu 2 ứng dụng AI khác nhau; nhật ký ghi nhận đầy đủ các lời gọi qua MCP</td></tr><tr><td><strong>Giá trị đạt được</strong></td><td>Bảo toàn giá trị đầu tư; giảm chi phí cho các sáng kiến ứng dụng AI tiếp theo</td></tr></tbody></table></div>
+<h3 id="136-tổng-hợp-lộ-trình"><span class="secnum">13.6</span><span class="sectext">Tổng hợp lộ trình</span></h3>
+<figure class="diagram"><div class="diagram-scroll"><pre class="mermaid">flowchart LR
+    P1[&quot;GD 1 — 3 thang&lt;br/&gt;Hoi dap tai lieu&quot;] --&gt; P2[&quot;GD 2 — 3-4 thang&lt;br/&gt;Tich hop cong cu tinh toan&quot;]
+    P2 --&gt; P3[&quot;GD 3 — 4-5 thang&lt;br/&gt;Tri thuc tinh huong&quot;]
+    P3 --&gt; P4[&quot;GD 4 — 3 thang&lt;br/&gt;He sinh thai MCP&quot;]</pre></div><figcaption>Sơ đồ 17</figcaption></figure>
+<div class="tablewrap"><table><thead><tr><th>Giai đoạn</th><th>Thời lượng</th><th>Nhân sự kỹ thuật</th><th>Sự tham gia của bộ phận nghiệp vụ</th><th>Điều kiện chuyển giai đoạn</th></tr></thead><tbody><tr><td>GĐ 1</td><td>3 tháng</td><td>4–5 người</td><td>1 chủ trì kỹ thuật, 30% thời gian</td><td>Đạt mức sử dụng và chất lượng đề ra</td></tr><tr><td>GĐ 2</td><td>3–4 tháng</td><td>5–6 người</td><td>1 kỹ sư kết cấu, 50% thời gian</td><td>Công cụ tính toán được xác nhận đúng</td></tr><tr><td>GĐ 3</td><td>4–5 tháng</td><td>5–6 người</td><td>Nhóm 3–5 kỹ sư theo đợt</td><td>Đạt số lượng tình huống tối thiểu</td></tr><tr><td>GĐ 4</td><td>3 tháng</td><td>3 người</td><td>Không đáng kể</td><td>Bộ công cụ được tái sử dụng</td></tr></tbody></table></div>
+<p><strong>Tổng thời gian dự kiến:</strong> 13–15 tháng cho toàn bộ bốn giai đoạn.</p>
+<p>Cần lưu ý rằng mức độ tham gia của bộ phận nghiệp vụ là yếu tố quyết định thành công, và đây là nguồn lực khó bố trí nhất. Nếu không bảo đảm được thời gian tham gia của kỹ sư chuyên môn theo mức đề xuất, cần điều chỉnh thời lượng giai đoạn tương ứng thay vì giữ nguyên tiến độ.</p>
+<hr>
+<h2 id="14-rủi-ro-và-biện-pháp-kiểm-soát"><span class="secnum">14</span><span class="sectext">Rủi ro và biện pháp kiểm soát</span></h2>
+<h3 id="141-bảng-tổng-hợp-rủi-ro"><span class="secnum">14.1</span><span class="sectext">Bảng tổng hợp rủi ro</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Mã</th><th>Rủi ro</th><th>Mức độ</th><th>Khả năng xảy ra</th><th>Biện pháp kiểm soát chính</th></tr></thead><tbody><tr><td><span class="tok">RR-01</span></td><td>Hệ thống đưa ra thông tin sai hoặc không có căn cứ</td><td>Cao</td><td>Trung bình</td><td>RAG bắt buộc dẫn chứng; kết quả tính toán do công cụ tạo ra; kỹ sư phê duyệt</td></tr><tr><td><span class="tok">RR-02</span></td><td>Chất lượng tài liệu đầu vào không bảo đảm</td><td>Cao</td><td>Cao</td><td>Rà soát và phân loại tài liệu trước khi đưa vào hệ thống; quản lý hiệu lực tài liệu</td></tr><tr><td><span class="tok">RR-03</span></td><td>Dữ liệu tình huống không được ghi nhận đủ</td><td>Cao</td><td>Cao</td><td>Ghi nhận trong luồng công việc; bản ghi có giá trị sử dụng ngay cho kỹ sư</td></tr><tr><td><span class="tok">RR-04</span></td><td>Rò rỉ dữ liệu dự án</td><td>Cao</td><td>Thấp</td><td>Phân quyền theo người dùng cuối; lọc quyền trước khi đưa vào ngữ cảnh; nhật ký đầy đủ</td></tr><tr><td><span class="tok">RR-05</span></td><td>Người dùng không tiếp nhận hệ thống</td><td>Cao</td><td>Trung bình</td><td>Triển khai theo giai đoạn; bắt đầu từ nhóm bài toán có giá trị rõ ràng; đo mức sử dụng thực tế</td></tr><tr><td><span class="tok">RR-06</span></td><td>Chi phí vận hành vượt dự kiến</td><td>Trung bình</td><td>Trung bình</td><td>Kiểm soát ngân sách theo phiên; theo dõi chi phí theo tháng; đặt ngưỡng cảnh báo</td></tr><tr><td><span class="tok">RR-07</span></td><td>Phụ thuộc vào một nhà cung cấp dịch vụ mô hình</td><td>Trung bình</td><td>Trung bình</td><td>Tách lớp trừu tượng khi gọi mô hình; tầng công cụ độc lập với nền tảng AI</td></tr><tr><td><span class="tok">RR-08</span></td><td>Thiếu nguồn lực nghiệp vụ tham gia</td><td>Cao</td><td>Cao</td><td>Xác định cam kết nhân sự ngay từ bước phê duyệt chủ trương</td></tr><tr><td><span class="tok">RR-09</span></td><td>Kết quả tính toán không nhất quán giữa các nguồn</td><td>Cao</td><td>Trung bình</td><td>Một nguồn logic duy nhất; MCP không chứa logic nghiệp vụ; kiểm thử đối chiếu</td></tr><tr><td><span class="tok">RR-10</span></td><td>Thay đổi tiêu chuẩn áp dụng làm sai lệch tri thức đã lưu</td><td>Trung bình</td><td>Cao</td><td>Quản lý vòng đời tài liệu và tình huống theo hiệu lực tiêu chuẩn</td></tr></tbody></table></div>
+<h3 id="142-phân-tích-các-rủi-ro-trọng-yếu"><span class="secnum">14.2</span><span class="sectext">Phân tích các rủi ro trọng yếu</span></h3>
+<h4 id="rr-01-thông-tin-sai-hoặc-không-có-căn-cứ"><span class="sectext"><span class="tok">RR-01</span> — Thông tin sai hoặc không có căn cứ</span></h4>
+<p><strong>Bản chất rủi ro:</strong> mô hình ngôn ngữ có khả năng tạo ra nội dung trôi chảy nhưng không chính xác (hallucination). Trong lĩnh vực kỹ thuật, một thông số sai được đưa vào hồ sơ có hậu quả nghiêm trọng.</p>
+<p><strong>Biện pháp kiểm soát theo lớp:</strong></p>
+<div class="tablewrap"><table><thead><tr><th>Lớp kiểm soát</th><th>Nội dung</th></tr></thead><tbody><tr><td>Lớp 1 — Ràng buộc nguồn</td><td>Hệ thống chỉ trả lời dựa trên đoạn tài liệu đã truy xuất; không sử dụng tri thức chung của mô hình cho nội dung kỹ thuật</td></tr><tr><td>Lớp 2 — Ngưỡng độ tin cậy</td><td>Khi không tìm được tài liệu đủ liên quan, hệ thống trả lời không đủ căn cứ thay vì suy đoán</td></tr><tr><td>Lớp 3 — Không tự tính toán</td><td>Mọi số liệu kỹ thuật đến từ công cụ tính toán, không do mô hình sinh ra</td></tr><tr><td>Lớp 4 — Dẫn chứng bắt buộc</td><td>Mỗi nội dung đều kèm nguồn để kỹ sư kiểm chứng</td></tr><tr><td>Lớp 5 — Phê duyệt của con người</td><td>Không có nội dung nào vào hồ sơ mà không qua phê duyệt</td></tr></tbody></table></div>
+<p><strong>Rủi ro còn lại sau kiểm soát:</strong> vẫn tồn tại khả năng hệ thống diễn giải sai một điều khoản đã trích dẫn đúng. Biện pháp cuối cùng là hiển thị nguyên văn đoạn trích dẫn để kỹ sư đối chiếu trực tiếp, không chỉ hiển thị phần diễn giải.</p>
+<h4 id="rr-02-chất-lượng-tài-liệu-đầu-vào"><span class="sectext"><span class="tok">RR-02</span> — Chất lượng tài liệu đầu vào</span></h4>
+<p><strong>Bản chất rủi ro:</strong> hệ thống phản ánh đúng nội dung tài liệu được cung cấp. Nếu kho tài liệu chứa bản lỗi thời, bản nháp hoặc nội dung mâu thuẫn, hệ thống sẽ trả lời theo các nội dung đó.</p>
+<p><strong>Biện pháp kiểm soát:</strong></p>
+<ol><li>Xác định chủ sở hữu cho từng nhóm tài liệu; chỉ tài liệu có chủ sở hữu xác nhận mới được đưa vào hệ thống.</li><li>Quản lý trạng thái hiệu lực: tài liệu hết hiệu lực được đánh dấu, không xoá.</li><li>Khi phát hiện mâu thuẫn giữa các nguồn, hệ thống trình bày cả hai nguồn kèm cảnh báo thay vì tự lựa chọn.</li><li>Rà soát định kỳ danh sách tài liệu được truy xuất nhiều nhưng nhận phản hồi tiêu cực.</li></ol>
+<p><strong>Lưu ý về phạm vi trách nhiệm:</strong> việc rà soát chất lượng tài liệu là công việc của bộ phận kỹ thuật, không thuộc phạm vi của dự án phần mềm. Cần xác định rõ nội dung này ngay từ bước phê duyệt chủ trương.</p>
+<h4 id="rr-03-dữ-liệu-tình-huống-không-được-ghi-nhận-đủ"><span class="sectext"><span class="tok">RR-03</span> — Dữ liệu tình huống không được ghi nhận đủ</span></h4>
+<p><strong>Bản chất rủi ro:</strong> đây là rủi ro có khả năng xảy ra cao nhất trong toàn bộ phương án. Các hệ thống quản lý tri thức thất bại chủ yếu do dữ liệu không được đóng góp, không do hạn chế kỹ thuật.</p>
+<p><strong>Biện pháp kiểm soát:</strong> đã trình bày tại Mục 7.8. Bổ sung ba biện pháp về mặt tổ chức:</p>
+<ol><li>Đưa chỉ tiêu số lượng tình huống được ghi nhận vào đánh giá công việc của bộ môn, không của cá nhân, nhằm tránh tạo động cơ ghi nhận hình thức.</li><li>Định kỳ công bố các tình huống được tham chiếu nhiều nhất, ghi nhận đóng góp của người phê duyệt.</li><li>Theo dõi chỉ số tỉ lệ câu hỏi được giải quyết bằng tiền lệ; đây là chỉ số phản ánh trực tiếp giá trị của kho tri thức.</li></ol>
+<h4 id="rr-05-người-dùng-không-tiếp-nhận-hệ-thống"><span class="sectext"><span class="tok">RR-05</span> — Người dùng không tiếp nhận hệ thống</span></h4>
+<p><strong>Bản chất rủi ro:</strong> hệ thống được xây dựng đầy đủ tính năng nhưng kỹ sư tiếp tục làm việc theo cách cũ.</p>
+<p><strong>Nguyên nhân thường gặp:</strong></p>
+<div class="tablewrap"><table><thead><tr><th>Nguyên nhân</th><th>Biện pháp phòng ngừa</th></tr></thead><tbody><tr><td>Chất lượng trả lời không ổn định ở giai đoạn đầu</td><td>Giới hạn phạm vi ban đầu ở nhóm tài liệu có chất lượng cao</td></tr><tr><td>Thời gian phản hồi chậm</td><td>Đặt yêu cầu phi chức năng rõ ràng ngay từ giai đoạn 1</td></tr><tr><td>Kết quả không dùng được trực tiếp cho hồ sơ</td><td>Bổ sung chức năng xuất dữ liệu phục vụ hồ sơ ngay từ giai đoạn 1</td></tr><tr><td>Không được đào tạo sử dụng</td><td>Tổ chức hướng dẫn theo bộ môn, sử dụng chính các câu hỏi thực tế của bộ môn đó</td></tr><tr><td>Lo ngại về vai trò công việc</td><td>Truyền thông rõ về nguyên tắc hệ thống hỗ trợ, không thay thế; nhấn mạnh vai trò phê duyệt của kỹ sư</td></tr></tbody></table></div>
+<p>Nguyên nhân cuối cùng cần được xử lý ở cấp lãnh đạo. Thông điệp cần nhất quán: hệ thống ghi nhận và làm nổi bật giá trị chuyên môn của kỹ sư, không làm giảm vai trò đó.</p>
+<h4 id="rr-06-chi-phí-vận-hành"><span class="sectext"><span class="tok">RR-06</span> — Chi phí vận hành</span></h4>
+<p><strong>Bản chất rủi ro:</strong> chi phí dịch vụ mô hình ngôn ngữ tính theo khối lượng xử lý. Thiết kế không kiểm soát có thể dẫn tới chi phí tăng nhanh khi số người dùng tăng.</p>
+<p><strong>Biện pháp kiểm soát:</strong> giới hạn số vòng lặp và khối lượng xử lý theo phiên; chọn lọc nội dung đưa vào ngữ cảnh; áp dụng cơ chế lưu kết quả cho các câu hỏi lặp lại; theo dõi chi phí theo bộ phận và đặt ngưỡng cảnh báo.</p>
+<p>Đề xuất bổ sung: xây dựng báo cáo chi phí theo tháng với đơn vị đo là <strong>chi phí trung bình cho một câu hỏi</strong>. Chỉ số này cho phép so sánh trực tiếp với chi phí thời gian tra cứu thủ công, phục vụ đánh giá hiệu quả đầu tư.</p>
+<h3 id="143-các-nội-dung-cần-quyết-định-ở-cấp-lãnh-đạo"><span class="secnum">14.3</span><span class="sectext">Các nội dung cần quyết định ở cấp lãnh đạo</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Nội dung</th><th>Yêu cầu quyết định</th></tr></thead><tbody><tr><td>Phạm vi dữ liệu đưa vào hệ thống</td><td>Xác định nhóm hồ sơ dự án được phép sử dụng, sau rà soát ràng buộc bảo mật</td></tr><tr><td>Nguồn lực nghiệp vụ</td><td>Cam kết thời gian tham gia của kỹ sư chuyên môn theo từng giai đoạn</td></tr><tr><td>Chủ sở hữu nghiệp vụ của hệ thống</td><td>Chỉ định một lãnh đạo bộ phận kỹ thuật chịu trách nhiệm về nội dung</td></tr><tr><td>Chính sách sử dụng kết quả</td><td>Ban hành quy định về việc sử dụng kết quả từ hệ thống trong hồ sơ</td></tr><tr><td>Ngân sách vận hành</td><td>Phê duyệt ngưỡng chi phí vận hành hằng năm</td></tr></tbody></table></div>
+<hr>
+<h2 id="15-định-hướng-phát-triển"><span class="secnum">15</span><span class="sectext">Định hướng phát triển</span></h2>
+<h3 id="151-nguyên-tắc"><span class="secnum">15.1</span><span class="sectext">Nguyên tắc</span></h3>
+<p>Các nội dung trong mục này là định hướng dài hạn, không thuộc phạm vi phê duyệt lần này. Mục đích trình bày là để bảo đảm các quyết định kiến trúc hiện tại không tạo ra rào cản cho các bước phát triển tiếp theo.</p>
+<p>Mỗi định hướng dưới đây chỉ khả thi khi các giai đoạn trước đã hoàn thành và dữ liệu đã tích luỹ đủ. Không đề xuất triển khai sớm.</p>
+<h3 id="152-các-định-hướng-mở-rộng"><span class="secnum">15.2</span><span class="sectext">Các định hướng mở rộng</span></h3>
+<p><strong>Trợ lý kỹ thuật tích hợp trong công cụ thiết kế.</strong> Đưa năng lực tra cứu và kiểm định vào trực tiếp môi trường làm việc của kỹ sư, thay vì yêu cầu chuyển sang ứng dụng riêng. Điều kiện: bộ công cụ đã được chuẩn hoá theo MCP (giai đoạn 4).</p>
+<p><strong>Kiểm tra hồ sơ thiết kế tự động.</strong> Hệ thống rà soát hồ sơ trước khi nộp thẩm tra và cảnh báo các nội dung có nguy cơ bị góp ý, dựa trên dữ liệu biên bản thẩm tra đã tích luỹ. Điều kiện: kho tình huống có đủ dữ liệu về kết quả thẩm tra.</p>
+<p><strong>Đồ thị tri thức kỹ thuật (knowledge graph).</strong> Biểu diễn quan hệ giữa cấu kiện, tiêu chuẩn, bài toán và phương án dưới dạng đồ thị, cho phép truy vấn theo quan hệ mà tìm kiếm theo ngữ nghĩa không đáp ứng được. Điều kiện: dữ liệu tình huống đủ lớn và đã được chuẩn hoá.</p>
+<p><strong>Phối hợp nhiều tác tử chuyên biệt (multi-agent).</strong> Phân chia thành các tác tử theo chuyên môn — kết cấu, nền móng, kiểm tra hồ sơ — phối hợp xử lý các bài toán liên bộ môn. Điều kiện: hệ thống một tác tử đã vận hành ổn định và đã xác định rõ ranh giới trách nhiệm.</p>
+<p><strong>Tự động hoá một phần quy trình thiết kế.</strong> Áp dụng cho các hạng mục có tính lặp cao và có tiêu chí kiểm tra rõ ràng. Điều kiện: đã có đủ dữ liệu tiền lệ và cơ chế kiểm định tự động đáng tin cậy. Nguyên tắc phê duyệt của con người vẫn được giữ nguyên trong mọi trường hợp.</p>
+<p><strong>Phân tích dữ liệu thiết kế phục vụ quản trị.</strong> Khai thác kho tình huống để phân tích xu hướng thiết kế, chi phí vật liệu theo phương án, và hiệu quả của các lựa chọn kỹ thuật khác nhau. Đây là nhóm giá trị chưa được đề cập trong các mục trước nhưng có ý nghĩa với công tác quản lý.</p>
+<h3 id="153-điều-kiện-bảo-đảm-khả-năng-mở-rộng"><span class="secnum">15.3</span><span class="sectext">Điều kiện bảo đảm khả năng mở rộng</span></h3>
+<p>Ba quyết định kiến trúc trong phương án hiện tại là điều kiện cần cho các định hướng trên:</p>
+<div class="tablewrap"><table><thead><tr><th>Quyết định</th><th>Vai trò đối với mở rộng</th></tr></thead><tbody><tr><td>Tầng dịch vụ nghiệp vụ độc lập với ứng dụng gọi (<span class="tok">AD-05</span>)</td><td>Cho phép bổ sung ứng dụng mới mà không sửa logic nghiệp vụ</td></tr><tr><td>Dữ liệu tình huống có cấu trúc (<span class="tok">AD-03</span>)</td><td>Là điều kiện bắt buộc cho đồ thị tri thức và phân tích dữ liệu</td></tr><tr><td>Nhật ký đầy đủ ba nhóm (Mục 8)</td><td>Là nguồn dữ liệu cho mọi hoạt động phân tích và cải thiện về sau</td></tr></tbody></table></div>
+<p>Nếu một trong ba quyết định này bị bỏ qua nhằm rút ngắn tiến độ giai đoạn đầu, phần lớn các định hướng tại Mục 15.2 sẽ đòi hỏi xây dựng lại từ đầu.</p>
+<hr>
+<h2 id="16-phụ-lục"><span class="secnum">16</span><span class="sectext">Phụ lục</span></h2>
+<h3 id="161-thuật-ngữ"><span class="secnum">16.1</span><span class="sectext">Thuật ngữ</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Thuật ngữ</th><th>Giải thích</th></tr></thead><tbody><tr><td>Agent Runtime</td><td>Thành phần điều phối trung tâm, tiếp nhận yêu cầu và điều phối việc gọi công cụ</td></tr><tr><td>Chunking</td><td>Quá trình cắt tài liệu thành các đoạn nhỏ phục vụ truy xuất</td></tr><tr><td>Embedding</td><td>Biểu diễn số học của văn bản, phục vụ tìm kiếm theo ngữ nghĩa</td></tr><tr><td>Hallucination</td><td>Hiện tượng mô hình sinh ra nội dung không chính xác nhưng trình bày trôi chảy</td></tr><tr><td>LLM</td><td>Mô hình ngôn ngữ lớn (Large Language Model)</td></tr><tr><td>MCP</td><td>Giao thức kết nối công cụ AI (Model Context Protocol)</td></tr><tr><td>Prompt injection</td><td>Kỹ thuật can thiệp hành vi hệ thống AI thông qua nội dung đầu vào</td></tr><tr><td>RAG</td><td>Truy xuất tăng cường sinh nội dung (Retrieval Augmented Generation)</td></tr><tr><td>RPO / RTO</td><td>Điểm khôi phục mục tiêu / Thời gian khôi phục mục tiêu</td></tr><tr><td>Tool Calling</td><td>Cơ chế cho phép hệ thống AI gọi các chức năng phần mềm đã định nghĩa</td></tr><tr><td>Vector database</td><td>Cơ sở dữ liệu chuyên dụng lưu trữ embedding</td></tr></tbody></table></div>
+<h3 id="162-danh-mục-quyết-định-kiến-trúc"><span class="secnum">16.2</span><span class="sectext">Danh mục quyết định kiến trúc</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Mã</th><th>Nội dung quyết định</th><th>Mục tham chiếu</th></tr></thead><tbody><tr><td><span class="tok">AD-01</span></td><td>Sử dụng RAG thay vì huấn luyện lại mô hình</td><td>0.4, 6</td></tr><tr><td><span class="tok">AD-02</span></td><td>Thành phần AI không truy cập trực tiếp dữ liệu</td><td>0.4, 5.4, 12</td></tr><tr><td><span class="tok">AD-03</span></td><td>Tri thức tình huống lưu ở dạng có cấu trúc</td><td>0.4, 7</td></tr><tr><td><span class="tok">AD-04</span></td><td>Phê duyệt của con người là bước bắt buộc</td><td>0.4, 7.5, 9.2</td></tr><tr><td><span class="tok">AD-05</span></td><td>MCP là tầng tích hợp, không chứa logic nghiệp vụ</td><td>0.4, 11.4</td></tr><tr><td><span class="tok">AD-06</span></td><td>Triển khai theo giai đoạn có giá trị độc lập</td><td>0.4, 13</td></tr><tr><td><span class="tok">AD-07</span></td><td>pgvector giai đoạn đầu, OpenSearch khi mở rộng</td><td>0.4, 10.3</td></tr><tr><td><span class="tok">AD-08</span></td><td>Ưu tiên độ tin cậy hơn độ bao phủ</td><td>0.4, 5.7, 6.4</td></tr></tbody></table></div>
+<h3 id="163-danh-mục-công-cụ-dự-kiến-triển-khai"><span class="secnum">16.3</span><span class="sectext">Danh mục công cụ dự kiến triển khai</span></h3>
+<div class="tablewrap"><table><thead><tr><th>Mã công cụ</th><th>Chức năng</th><th>Nhóm rủi ro</th><th>Giai đoạn</th></tr></thead><tbody><tr><td><code>doc.search</code></td><td>Tra cứu tài liệu nội bộ</td><td>A — chỉ đọc</td><td>GĐ 1</td></tr><tr><td><code>project.element.get</code></td><td>Truy vấn thông số cấu kiện</td><td>A — chỉ đọc</td><td>GĐ 2</td></tr><tr><td><code>case.search_similar</code></td><td>Tra cứu tình huống tương tự</td><td>A — chỉ đọc</td><td>GĐ 3</td></tr><tr><td><code>calc.beam.flexure</code></td><td>Kiểm tra khả năng chịu uốn của dầm</td><td>B — tính toán</td><td>GĐ 2</td></tr><tr><td><code>calc.beam.shear</code></td><td>Kiểm tra khả năng chịu cắt của dầm</td><td>B — tính toán</td><td>GĐ 2</td></tr><tr><td><code>calc.beam.deflection</code></td><td>Kiểm tra độ võng</td><td>B — tính toán</td><td>GĐ 2</td></tr><tr><td><code>calc.column.capacity</code></td><td>Kiểm tra khả năng chịu lực của cột</td><td>B — tính toán</td><td>GĐ 3</td></tr><tr><td><code>case.create</code></td><td>Ghi nhận tình huống kỹ thuật</td><td>C — ghi dữ liệu</td><td>GĐ 3</td></tr></tbody></table></div>
+<p>Danh mục này là dự kiến ở mức đề xuất chủ trương. Danh mục chính thức được xác định trong bước lập kế hoạch chi tiết, trên cơ sở khảo sát tần suất sử dụng thực tế của từng bộ môn.</p>
+<h3 id="164-nội-dung-trình-phê-duyệt"><span class="secnum">16.4</span><span class="sectext">Nội dung trình phê duyệt</span></h3>
+<p>Đề nghị Ban lãnh đạo xem xét và cho ý kiến về các nội dung sau:</p>
+<ol><li>Phê duyệt chủ trương triển khai hệ thống AI Engineering Assistant theo phương án kiến trúc trình bày tại tài liệu này.</li><li>Phê duyệt triển khai giai đoạn 1 với thời lượng 3 tháng và phạm vi nêu tại Mục 13.2.</li><li>Chỉ định chủ sở hữu nghiệp vụ của hệ thống thuộc bộ phận kỹ thuật.</li><li>Phê duyệt cam kết nguồn lực nghiệp vụ tham gia theo mức đề xuất tại Mục 13.6.</li><li>Giao bộ phận kỹ thuật rà soát và bàn giao danh mục tài liệu phục vụ giai đoạn 1.</li><li>Giao bộ phận pháp chế rà soát các nội dung nêu tại Mục 12.6 trước khi ký kết dịch vụ.</li></ol>
+<hr>
+<p><em>Kết thúc tài liệu.</em></p>
+      </article>
+    </div>
+  </main>
+</div>
+<script>
+(function(){
+  var root=document.documentElement, btn=document.getElementById('themebtn');
+  function label(){
+    var t=root.getAttribute('data-theme');
+    btn.textContent = t==='dark' ? 'Giao diện: Tối' : (t==='light' ? 'Giao diện: Sáng' : 'Giao diện: Theo hệ thống');
+  }
+  try{ var saved=localStorage.getItem('proposal-theme'); if(saved) root.setAttribute('data-theme',saved); }catch(e){}
+  label();
+  btn.addEventListener('click',function(){
+    var t=root.getAttribute('data-theme');
+    var next = t==='dark' ? 'light' : (t==='light' ? '' : 'dark');
+    if(next) root.setAttribute('data-theme',next); else root.removeAttribute('data-theme');
+    try{ next ? localStorage.setItem('proposal-theme',next) : localStorage.removeItem('proposal-theme'); }catch(e){}
+    label();
+  });
+
+  var links=Array.prototype.slice.call(document.querySelectorAll('.navlist a'));
+  var map={};
+  links.forEach(function(a){ var el=document.getElementById(decodeURIComponent(a.hash.slice(1))); if(el) map[el.id]=a; });
+  var current=null;
+  function mark(a){
+    if(a===current) return;
+    if(current) current.removeAttribute('aria-current');
+    if(a){ a.setAttribute('aria-current','true'); }
+    current=a;
+  }
+  var obs=new IntersectionObserver(function(entries){
+    var vis=entries.filter(function(e){return e.isIntersecting;});
+    if(!vis.length) return;
+    vis.sort(function(x,y){return x.boundingClientRect.top-y.boundingClientRect.top;});
+    mark(map[vis[0].target.id]);
+  },{rootMargin:'0px 0px -72% 0px',threshold:0});
+  Object.keys(map).forEach(function(id){ obs.observe(document.getElementById(id)); });
+  mark(links[0]);
+})();
+</script>
