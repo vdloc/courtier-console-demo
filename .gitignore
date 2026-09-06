@@ -14,3 +14,5 @@ warn.txt
 # Python bytecode from the Blender scripts
 __pycache__/
 *.pyc
+
+renders/

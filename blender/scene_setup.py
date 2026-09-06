@@ -63,10 +63,27 @@ SCENE = {
     # frame's depth, without the colour cast of a sunset.
     "sun_elevation": 18.0,
     "sun_rotation": 235.0,          # from the south-west, across the long face
-    "sun_strength": 2.4,
+    # Irradiance in W/m2. Blender's sky texture is not on a physical scale: at
+    # strength 1.0 it delivers roughly as much ambient as a 30 W/m2 sun, so a
+    # "physically plausible" 2.4 left the sun an order of magnitude below the
+    # sky and the frame rendered shadowless. This is a measured ratio against
+    # `sky_light`, not a physical constant - move one and the shadows move.
+    "sun_strength": 12.0,
     "sun_angle": 1.5,               # apparent size in degrees; softens shadows
-    "sky_dust": 3.0,                # atmospheric haze; adds aerial perspective
-    "sky_strength": 1.0,
+
+    # Nishita's aerosol term. The 4.x property was `dust_density`; Blender 5's
+    # MULTIPLE_SCATTERING model renames it and splits ozone out, so the old
+    # name set nothing and the sky carried no haze at all.
+    "sky_aerosol": 2.0,             # atmospheric haze; adds aerial perspective
+    "sky_ozone": 1.0,
+    "sky_ground_albedo": 0.12,      # bounce off a site, not off snow
+
+    # The sky is two numbers because one cannot do both jobs. Bright enough to
+    # photograph as a sky and its ambient washes out every shadow; dim enough
+    # for shadows and the background renders near-black. `sky_light` lights
+    # the frame, `sky_view` is what the camera sees.
+    "sky_light": 0.30,
+    "sky_view": 1.60,
 
     # --- ground -------------------------------------------------------------
     "ground_size": 400.0,
@@ -79,7 +96,10 @@ SCENE = {
     "resolution": (1920, 1080),
     "view_transform": "AgX",        # holds highlights on metal; Filmic's heir
     "look": "AgX - Medium High Contrast",
-    "exposure": -0.5,
+    # Set against the sun/sky pair above, not chosen for its own sake: RAL
+    # 7016 steel at 0.055 albedo has to land as dark grey, not as the mid grey
+    # a generous exposure turns it into.
+    "exposure": -0.8,
     "film_transparent": False,
 }
 
@@ -105,10 +125,34 @@ def setup_world():
     nodes.clear()
 
     out = nodes.new("ShaderNodeOutputWorld")
-    out.location = (600, 0)
-    background = nodes.new("ShaderNodeBackground")
-    background.location = (350, 0)
-    background.inputs["Strength"].default_value = SCENE["sky_strength"]
+    out.location = (900, 0)
+
+    # Two Background nodes off one sky, mixed on Is Camera Ray.
+    #
+    # A single strength cannot serve both purposes. The Nishita sky is a very
+    # efficient ambient source - at strength 1.0 it fills every shadow the sun
+    # casts, and the frame renders as flat as a product shot on a lightbox.
+    # Dropping it far enough for the sun to read then takes the *background*
+    # down with it, and the demo gains a night sky over a sunlit building.
+    #
+    # So: `sky_light` is the environment that lights the frame, `sky_view` is
+    # the one the camera photographs. Both come off the same Sky texture, so
+    # the horizon the viewer sees is still the horizon that lit the steel -
+    # only its exposure differs. This is a lighting-department convention, not
+    # a cheat: it is what a neutral-density gel on a window achieves.
+    light_bg = nodes.new("ShaderNodeBackground")
+    light_bg.location = (350, 120)
+    light_bg.inputs["Strength"].default_value = SCENE["sky_light"]
+
+    view_bg = nodes.new("ShaderNodeBackground")
+    view_bg.location = (350, -120)
+    view_bg.inputs["Strength"].default_value = SCENE["sky_view"]
+
+    light_path = nodes.new("ShaderNodeLightPath")
+    light_path.location = (350, 380)
+
+    mix = nodes.new("ShaderNodeMixShader")
+    mix.location = (650, 0)
 
     sky = nodes.new("ShaderNodeTexSky")
     sky.location = (0, 0)
@@ -131,7 +175,12 @@ def setup_world():
         ("sun_rotation", math.radians(SCENE["sun_rotation"])),
         ("sun_intensity", 1.0),
         ("sun_size", math.radians(SCENE["sun_angle"])),
-        ("dust_density", SCENE["sky_dust"]),
+        # 4.x spelling, kept so this still runs on Blender 4.2.
+        ("dust_density", SCENE["sky_aerosol"]),
+        # Blender 5 MULTIPLE_SCATTERING spellings.
+        ("aerosol_density", SCENE["sky_aerosol"]),
+        ("ozone_density", SCENE["sky_ozone"]),
+        ("ground_albedo", SCENE["sky_ground_albedo"]),
         ("air_density", 1.0),
         ("altitude", 20.0),
         ("sun_disc", False),
@@ -139,8 +188,14 @@ def setup_world():
         if hasattr(sky, attr):
             setattr(sky, attr, value)
 
-    links.new(sky.outputs["Color"], background.inputs["Color"])
-    links.new(background.outputs["Background"], out.inputs["Surface"])
+    links.new(sky.outputs["Color"], light_bg.inputs["Color"])
+    links.new(sky.outputs["Color"], view_bg.inputs["Color"])
+    # Camera rays take the bright sky; every bounce that lights the frame
+    # takes the dim one.
+    links.new(light_path.outputs["Is Camera Ray"], mix.inputs["Fac"])
+    links.new(light_bg.outputs["Background"], mix.inputs[1])
+    links.new(view_bg.outputs["Background"], mix.inputs[2])
+    links.new(mix.outputs["Shader"], out.inputs["Surface"])
     return world
 
 
@@ -196,16 +251,113 @@ def setup_ground():
 
     mat = (bpy.data.materials.get("MAT_Ground")
            or bpy.data.materials.new("MAT_Ground"))
-    if not mat.node_tree:
-        mat.use_nodes = True
-    bsdf = mat.node_tree.nodes.get("Principled BSDF")
-    if bsdf:
-        bsdf.inputs["Base Color"].default_value = SCENE["ground_color"]
-        bsdf.inputs["Roughness"].default_value = 0.95
-        bsdf.inputs["Metallic"].default_value = 0.0
+    mat.use_nodes = True
+    build_ground_material(mat)
     ground.data.materials.clear()
     ground.data.materials.append(mat)
     return ground
+
+
+def _reset(mat):
+    """Empty a material's node tree and hand back (nodes, links).
+
+    Local rather than imported from materials.py: scene_setup is documented as
+    runnable on its own (`blender -b -P blender/scene_setup.py`), and the
+    material library is not on sys.path in that case.
+    """
+    mat.use_nodes = True
+    tree = mat.node_tree
+    tree.nodes.clear()
+    return tree.nodes, tree.links
+
+
+def _rgba(rgb, alpha=1.0):
+    return (rgb[0], rgb[1], rgb[2], alpha)
+
+
+def _ramp(node, stops):
+    """Set a ColorRamp's stops from ((position, rgba), ...)."""
+    elements = node.color_ramp.elements
+    while len(elements) > len(stops):
+        elements.remove(elements[-1])
+    for index, (position, colour) in enumerate(stops):
+        element = (elements[index] if index < len(elements)
+                   else elements.new(position))
+        element.position = position
+        element.color = colour
+    return node
+
+
+def build_ground_material(mat):
+    """Procedural site surface: damp hardstanding, not a grey card.
+
+    A single flat colour over 400 m is the second-loudest CG tell in the wide
+    shot, after untextured concrete. Real ground is never uniform - it has
+    tracked mud, patches that dried at different rates, and a scale of
+    variation large enough to read from 60 m away. Two noise octaves are
+    enough: a metre-scale one for wet/dry patching and a decimetre-scale one
+    for grain, mixed into both colour and roughness so the patches change how
+    the surface reflects, not only what shade it is. Roughness variation is
+    what sells damp; colour variation alone reads as a painted floor.
+
+    Deliberately no bump: at grazing incidence from 60 m a normal on a ground
+    plane this large buys nothing but sampling noise.
+    """
+    nodes, links = _reset(mat)
+
+    out = nodes.new("ShaderNodeOutputMaterial")
+    out.location = (600, 0)
+    bsdf = nodes.new("ShaderNodeBsdfPrincipled")
+    bsdf.location = (350, 0)
+    bsdf.inputs["Metallic"].default_value = 0.0
+
+    coords = nodes.new("ShaderNodeTexCoord")
+    coords.location = (-800, 0)
+
+    # Object coordinates on this plane are metres, and the plane is 400 m
+    # across, so Noise `Scale` is (roughly) features per metre: the scales
+    # below are chosen for how large the patches read from the hero camera at
+    # 60 m, not for how they look zoomed in. Anything above ~1.0 here is
+    # sub-metre, lands under a pixel at that distance, and renders as grain
+    # rather than as ground.
+    patch = nodes.new("ShaderNodeTexNoise")
+    patch.location = (-600, 150)
+    patch.inputs["Scale"].default_value = 0.05      # ~20 m wet/dry patches
+    patch.inputs["Detail"].default_value = 6.0
+    patch.inputs["Roughness"].default_value = 0.65
+
+    grain = nodes.new("ShaderNodeTexNoise")
+    grain.location = (-600, -150)
+    grain.inputs["Scale"].default_value = 0.7       # ~1.5 m tracked grit
+    grain.inputs["Detail"].default_value = 4.0
+
+    mix_noise = nodes.new("ShaderNodeMix")
+    mix_noise.data_type = "FLOAT"
+    mix_noise.location = (-380, 0)
+    mix_noise.inputs["Factor"].default_value = 0.35
+
+    colour = nodes.new("ShaderNodeValToRGB")
+    colour.location = (-150, 120)
+    base = SCENE["ground_color"]
+    wet = tuple(c * 0.55 for c in base[:3])
+    dry = tuple(min(1.0, c * 2.4) for c in base[:3])
+    _ramp(colour, ((0.30, _rgba(wet)), (0.72, _rgba(dry))))
+
+    rough = nodes.new("ShaderNodeMapRange")
+    rough.location = (-150, -180)
+    rough.inputs["To Min"].default_value = 0.62   # damp, still reflective
+    rough.inputs["To Max"].default_value = 0.98   # dried out, fully matte
+
+    links.new(coords.outputs["Object"], patch.inputs["Vector"])
+    links.new(coords.outputs["Object"], grain.inputs["Vector"])
+    links.new(patch.outputs["Fac"], mix_noise.inputs[2])
+    links.new(grain.outputs["Fac"], mix_noise.inputs[3])
+    links.new(mix_noise.outputs[0], colour.inputs["Fac"])
+    links.new(mix_noise.outputs[0], rough.inputs["Value"])
+    links.new(colour.outputs["Color"], bsdf.inputs["Base Color"])
+    links.new(rough.outputs["Result"], bsdf.inputs["Roughness"])
+    links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
+    return mat
 
 
 # ---------------------------------------------------------------------------

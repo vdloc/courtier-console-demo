@@ -58,10 +58,15 @@ MATERIALS = {
         # exposed - bolts, galvanising, weld beads, and the worn arrises,
         # where the wear mask drives metallic to 1.0.
         "metallic": 0.12,
-        "roughness": 0.38,                        # mid of the 0.25-0.45 band
+        # Was 0.38, the mid of the 0.25-0.45 swatch band. On a 12 m column
+        # that band still mirrors the sky into a vertical smear - the corner
+        # shot rendered the columns as chrome. Site steel two years into its
+        # life is chalked by UV and dulled by dust, and 0.52 is what stops the
+        # frame reading as showroom furniture. Credibility, not shine.
+        "roughness": 0.52,
         "paint_variation": 0.075,                 # roller/spray mottle depth
         "scratch_density": 1.00,
-        "scratch_roughness": 0.26,                # bare metal where paint is gone
+        "scratch_roughness": 0.34,                # bare metal where paint is gone
         "bare_metal": (0.310, 0.320, 0.335),
         "bump_strength": 0.055,
         "edge_wear": 0.30,   # paint loss on convex arrises
@@ -161,9 +166,13 @@ MATERIALS = {
     },
     "MAT_Concrete": {
         "kind": "concrete",
-        "base_color": (0.480, 0.472, 0.452),      # cured grey, formwork finish
-        "dust_color": (0.640, 0.622, 0.585),      # settled dust on up-faces
-        "pit_color": (0.300, 0.292, 0.278),       # blowholes read near-black
+        # Measured concrete albedo is 0.25-0.35. The old 0.48 was a *swatch*
+        # value - what a sample card reads indoors - and under a 12 W/m2 sun
+        # it rendered the pad footings as near-white plastic, the loudest
+        # untextured-CG tell in the wide shot.
+        "base_color": (0.300, 0.294, 0.280),      # cured grey, formwork finish
+        "dust_color": (0.430, 0.418, 0.395),      # settled dust on up-faces
+        "pit_color": (0.165, 0.160, 0.152),       # blowholes read near-black
         "metallic": 0.00,
         "roughness": 0.88,
         "pore_scale": 40.0,
