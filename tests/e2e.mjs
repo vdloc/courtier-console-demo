@@ -272,7 +272,11 @@ check('close button closes the modal',
   await page.$eval('#modal-overlay', (e) => e.classList.contains('hidden')));
 
 console.log('\n9. Console');
-check('no console errors over the whole run', consoleErrors.length === 0, consoleErrors.join(' | '));
+// Deduped: a per-frame failure otherwise prints hundreds of identical lines
+// and buries every other result.
+const uniqueErrors = [...new Set(consoleErrors)];
+check('no console errors over the whole run', uniqueErrors.length === 0,
+  uniqueErrors.map((e) => `${e} (x${consoleErrors.filter((x) => x === e).length})`).join(' | '));
 
 await browser.close();
 

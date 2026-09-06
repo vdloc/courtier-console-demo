@@ -190,3 +190,250 @@ chi phí kiểm tra lại lớn hơn chi phí tự tra cứu. Một hệ thống
 liệu" giữ được lòng tin và vẫn tiết kiệm thời gian ở chín lần còn lại.
 
 ---
+
+## 1. Tóm tắt dành cho lãnh đạo
+
+### 1.1 Vấn đề đang tồn tại
+
+Tài sản lớn nhất của một công ty tư vấn thiết kế không nằm ở phần mềm hay thiết bị, mà nằm ở
+**kinh nghiệm kỹ thuật tích luỹ qua các dự án đã làm**. Một kỹ sư mười năm kinh nghiệm biết
+rằng với nhịp dầm 7,2 m và tải sàn thông thường, tiết diện 300×600 mm là hợp lý; biết rằng
+cách bố trí cốt thép nào từng bị tư vấn thẩm tra bác bỏ; biết dự án nào đã gặp bài toán tương
+tự và giải quyết ra sao. Toàn bộ tri thức đó hiện nằm trong đầu từng cá nhân, hoặc nằm rải rác
+trong các thư mục hồ sơ mà chỉ người trực tiếp làm mới biết đường tìm.
+
+Hệ quả có thể quan sát được trong vận hành hằng ngày:
+
+- Kỹ sư mất thời gian đáng kể chỉ để **tìm lại** một tài liệu, một bảng tính, hoặc một quyết
+  định đã có sẵn trong công ty.
+- Cùng một bài toán được tính lại nhiều lần ở nhiều dự án, bởi nhiều người khác nhau, và
+  không ai biết rằng nó đã từng được giải.
+- Kết quả thiết kế **thiếu nhất quán** giữa các nhóm: cùng một điều kiện đầu vào nhưng hai
+  nhóm cho hai phương án khác nhau, do dựa trên kinh nghiệm cá nhân khác nhau.
+- Kỹ sư mới cần thời gian dài để đạt năng suất, vì quá trình học chủ yếu diễn ra qua hỏi trực
+  tiếp người có kinh nghiệm — vốn là nguồn lực khan hiếm nhất của công ty.
+- Khi một kỹ sư giỏi nghỉ việc, **phần tri thức đi theo người đó không được ghi lại ở đâu cả**.
+
+Đây không phải vấn đề về năng lực con người hay kỷ luật làm việc. Đây là vấn đề về **hạ tầng
+tri thức**: công ty chưa có nơi nào để tri thức kỹ thuật được lưu lại ở dạng có thể tìm kiếm,
+tái sử dụng và kiểm chứng.
+
+### 1.2 Giải pháp đề xuất
+
+Đề xuất xây dựng một hệ thống **AI Engineering Assistant** — trợ lý kỹ thuật nội bộ — hoạt
+động như một đồng nghiệp có trí nhớ tuyệt đối về toàn bộ tài liệu và lịch sử dự án của công
+ty, nhưng **luôn đưa ra dẫn chứng và luôn cần kỹ sư phê duyệt**.
+
+Hệ thống được xây dựng trên bốn công nghệ nền:
+
+| Công nghệ | Vai trò trong hệ thống | Nói theo ngôn ngữ nghiệp vụ |
+|---|---|---|
+| **LLM** | Đọc hiểu câu hỏi tự nhiên và diễn đạt câu trả lời | Cho phép kỹ sư hỏi bằng tiếng Việt thông thường, không cần học cú pháp tra cứu |
+| **RAG** | Bắt buộc AI đọc tài liệu nội bộ trước khi trả lời | Câu trả lời dựa trên tài liệu của công ty, kèm trích dẫn nguồn |
+| **Tool Calling** | Cho AI gọi các công cụ tính toán, kiểm định | AI không "đoán" số liệu — nó chạy đúng công cụ mà kỹ sư vẫn dùng |
+| **MCP** | Chuẩn hoá bộ tool để nhiều hệ thống AI cùng dùng | Đầu tư một lần, dùng lại cho các trợ lý AI khác trong tương lai |
+
+Trên nền đó, hệ thống có ba tầng năng lực, xây dựng tuần tự:
+
+1. **Tầng tri thức tài liệu** — trả lời câu hỏi dựa trên tiêu chuẩn, quy trình, sổ tay kỹ
+   thuật và hồ sơ dự án cũ.
+2. **Tầng tri thức kinh nghiệm** — lưu lại các tình huống kỹ thuật đã xử lý dưới dạng có cấu
+   trúc, để hệ thống có thể tìm ra tình huống tương tự đã được duyệt.
+3. **Tầng thực thi kỹ thuật** — gọi công cụ tính toán để kiểm chứng phương án trước khi đề
+   xuất, thay vì chỉ dựa vào văn bản.
+
+Ví dụ minh hoạ toàn bộ ba tầng cùng làm việc:
+
+> **Kỹ sư hỏi:** "Dầm B12 không đạt kiểm tra ứng suất. Cần tăng cốt thép bao nhiêu?"
+>
+> **Hệ thống trả lời:**
+> - Tra được 4 tình huống tương tự trong lịch sử công ty (nhịp 7,0–7,5 m, bê tông B25, tải
+>   trọng cùng nhóm), trong đó 3 tình huống đã được phê duyệt.
+> - Chạy công cụ kiểm tra khả năng chịu uốn với phương án tăng thép, kết quả **ĐẠT**.
+> - **Hiện trạng:** 6D20 · **Đề xuất:** 8D25 · **Hệ số an toàn sau thay đổi:** 1,18.
+> - **Căn cứ:** Dự án X, cấu kiện B07 (duyệt ngày 12/03/2025); tiêu chuẩn TCVN 5574:2018,
+>   Điều 8.1; kết quả kiểm định tự động đính kèm.
+> - **Trạng thái:** *Chờ kỹ sư phê duyệt.*
+
+Điểm mấu chốt: hệ thống **không quyết định thay kỹ sư**. Nó rút ngắn quãng đường từ câu hỏi
+đến phương án có căn cứ, còn quyết định và trách nhiệm vẫn thuộc về con người ký hồ sơ.
+
+### 1.3 Giá trị kinh doanh dự kiến
+
+| Nhóm giá trị | Nội dung | Cách đo lường |
+|---|---|---|
+| **Giảm thời gian tra cứu** | Kỹ sư tìm được tài liệu và tiền lệ trong vài chục giây thay vì vài chục phút | Thời gian trung bình từ lúc đặt câu hỏi đến lúc có căn cứ sử dụng được |
+| **Tái sử dụng kinh nghiệm** | Phương án đã được duyệt trở thành tài sản dùng lại, không phải tính lại từ đầu | Tỉ lệ câu hỏi được giải quyết bằng tình huống có sẵn |
+| **Tăng tính nhất quán thiết kế** | Các nhóm cùng tham chiếu một nguồn tiền lệ và một bộ công cụ tính toán | Độ phân tán của phương án cho cùng nhóm điều kiện đầu vào |
+| **Rút ngắn thời gian đào tạo** | Kỹ sư mới tự tra được tiền lệ kèm giải thích, giảm phụ thuộc vào việc hỏi người có kinh nghiệm | Thời gian để kỹ sư mới xử lý độc lập một hạng mục tiêu chuẩn |
+| **Giữ lại tri thức công ty** | Quyết định kỹ thuật được ghi nhận có cấu trúc, không mất khi nhân sự thay đổi | Số tình huống kỹ thuật được ghi nhận và phê duyệt mỗi tháng |
+| **Nâng chất lượng hồ sơ** | Mỗi đề xuất đều kèm dẫn chứng và kết quả kiểm định, thuận lợi khi giải trình với thẩm tra | Tỉ lệ ý kiến thẩm tra liên quan đến thiếu căn cứ |
+
+Cần nói rõ để tránh kỳ vọng sai: **các chỉ số trên chưa thể cam kết bằng con số cụ thể ở thời
+điểm này**, vì công ty chưa có số liệu nền (baseline) về thời gian tra cứu hiện tại. Việc đầu
+tiên của giai đoạn 1 là đo baseline đó. Mọi tuyên bố kiểu "giảm 40% thời gian" khi chưa đo là
+tuyên bố tiếp thị, không phải phân tích kỹ thuật.
+
+### 1.4 Đề xuất trình lãnh đạo
+
+Phê duyệt chủ trương triển khai theo **bốn giai đoạn**, mỗi giai đoạn có tiêu chí kết thúc rõ
+ràng và có thể dừng lại nếu không đạt:
+
+| Giai đoạn | Thời lượng | Nội dung chính | Tiêu chí kết thúc |
+|---|---|---|---|
+| **GĐ 1** | 3 tháng | Hỏi đáp tài liệu nội bộ có dẫn chứng | Có ít nhất 20 kỹ sư dùng thường xuyên; tỉ lệ câu trả lời có dẫn chứng đúng đạt ngưỡng đã thống nhất |
+| **GĐ 2** | 3–4 tháng | Tích hợp công cụ tính toán qua Tool Calling | Ít nhất 3 công cụ tính toán chạy được từ trợ lý, có nhật ký đầy đủ |
+| **GĐ 3** | 4–5 tháng | Hệ thống tri thức tình huống kỹ thuật | Có tối thiểu 300 tình huống đã được phê duyệt trong kho |
+| **GĐ 4** | 3 tháng | Hệ sinh thái MCP và mở rộng | Bộ tool dùng lại được bởi ít nhất 2 ứng dụng AI khác nhau |
+
+Quyết định cần từ lãnh đạo ở thời điểm này chỉ gồm ba nội dung: (1) phê duyệt chủ trương và
+ngân sách giai đoạn 1; (2) chỉ định một Trưởng phòng Kỹ thuật làm chủ sở hữu nghiệp vụ của hệ
+thống; (3) cho phép bộ phận kỹ thuật dành thời gian rà soát và bàn giao tập tài liệu ban đầu.
+
+---
+
+## 2. Hiện trạng, vấn đề và cơ hội
+
+### 2.1 Cách tri thức kỹ thuật đang lưu chuyển trong công ty
+
+Trước khi bàn giải pháp, cần mô tả chính xác dòng chảy tri thức hiện tại. Trong một công ty tư
+vấn thiết kế điển hình, tri thức kỹ thuật tồn tại ở bốn dạng, với mức độ tiếp cận rất khác
+nhau:
+
+```mermaid
+flowchart TD
+    A["Tri thức chuẩn tắc: TCVN, ACI, Eurocode, sổ tay"] --> E["Kỹ sư đang thiết kế"]
+    B["Tri thức quy trình: quy định nội bộ, checklist, mẫu hồ sơ"] --> E
+    C["Tri thức dự án: hồ sơ tính toán, bản vẽ, biên bản thẩm tra"] --> E
+    D["Tri thức ngầm: kinh nghiệm cá nhân chưa ghi lại"] --> E
+    E --> F["Phương án thiết kế"]
+    F --> G["Hồ sơ nộp thẩm tra"]
+    G -.->|"Không quay lại kho tri thức"| C
+```
+
+Vấn đề nằm ở đường nét đứt trong sơ đồ: **kết quả của một dự án hầu như không quay ngược lại
+làm giàu kho tri thức của công ty**. Hồ sơ được lưu vào thư mục dự án và dừng ở đó. Không ai
+gán nhãn "bài toán này là bài toán gì", "phương án chọn là gì", "vì sao chọn". Vì vậy dự án
+thứ hai mươi vẫn phải giải lại bài toán mà dự án thứ ba đã giải xong.
+
+### 2.2 Các vấn đề cụ thể
+
+**Vấn đề 1 — Tri thức phân tán, không có điểm truy cập duy nhất**
+
+Tài liệu nằm trên file server theo cây thư mục dự án, một phần nằm trong email trao đổi, một
+phần trên máy cá nhân, một phần trong các nhóm chat. Công cụ tìm kiếm của hệ điều hành chỉ tìm
+theo tên file, không tìm theo nội dung, và hoàn toàn không tìm được theo **ý nghĩa** của câu
+hỏi. Một kỹ sư muốn biết "công ty đã từng xử lý móng trên nền đất yếu ở khu vực có mực nước
+ngầm cao như thế nào" không có cách nào tìm ra ngoài việc hỏi người khác.
+
+*Chi phí thực tế:* thời gian tra cứu bị tính vào giờ dự án nhưng không tạo ra giá trị mới, và
+kết quả tra cứu phụ thuộc vào trí nhớ của người được hỏi.
+
+**Vấn đề 2 — Không tra cứu được tiền lệ đã xử lý**
+
+Đây là vấn đề nghiêm trọng hơn vấn đề 1, và ít được nhận ra hơn. Ngay cả khi tìm được hồ sơ
+tính toán của một dự án cũ, kỹ sư vẫn phải tự đọc để hiểu bối cảnh: điều kiện đầu vào là gì,
+phương án cuối cùng là gì, có bị thẩm tra bác không, đã sửa những gì. Thông tin này nằm rải
+rác trong nhiều file khác nhau và thường không đầy đủ.
+
+*Chi phí thực tế:* công ty không tận dụng được chính kinh nghiệm của mình. Mỗi dự án bắt đầu
+gần như từ con số không về mặt tri thức tình huống.
+
+**Vấn đề 3 — Tri thức của kỹ sư giàu kinh nghiệm không được tập trung hoá**
+
+Những người có kinh nghiệm nhất thường là những người bận nhất. Họ trở thành nút thắt cổ chai:
+mọi câu hỏi khó đều dồn về họ. Thời gian của họ bị tiêu vào việc trả lời lại những câu hỏi đã
+trả lời nhiều lần, thay vì vào những bài toán thực sự cần đến kinh nghiệm của họ.
+
+*Chi phí thực tế:* năng lực khan hiếm nhất bị sử dụng sai chỗ, và rủi ro tập trung vào cá nhân
+rất cao — nếu người đó nghỉ, một mảng năng lực của công ty biến mất theo.
+
+**Vấn đề 4 — Tính toán lặp lại**
+
+Nhiều bài toán kỹ thuật có tính lặp cao: kiểm tra khả năng chịu uốn, chịu cắt, kiểm tra độ
+võng, tính toán neo và nối thép. Các bài toán này thường được thực hiện bằng bảng tính Excel
+truyền tay giữa các kỹ sư, mỗi người giữ một phiên bản riêng, và không ai chắc phiên bản nào
+là bản đúng nhất.
+
+*Chi phí thực tế:* ngoài thời gian lãng phí, còn có rủi ro chất lượng — hai kỹ sư dùng hai
+phiên bản bảng tính khác nhau có thể ra hai kết quả khác nhau cho cùng một bài toán.
+
+**Vấn đề 5 — Onboarding kỹ sư mới chậm**
+
+Một kỹ sư mới ra trường cần thời gian dài để nắm được không chỉ kiến thức chuyên môn, mà cả
+**cách làm của công ty**: dùng mẫu hồ sơ nào, quy ước đặt tên ra sao, mức độ chi tiết đến đâu
+là đủ, những lỗi nào hay bị thẩm tra bắt. Toàn bộ phần này hiện được truyền đạt bằng miệng.
+
+*Chi phí thực tế:* chi phí đào tạo cao, chất lượng đào tạo không đồng đều giữa các nhóm, và
+thời gian của người hướng dẫn bị chiếm dụng đáng kể.
+
+**Vấn đề 6 — Thiếu nhất quán giữa các nhóm thiết kế**
+
+Khi mỗi nhóm dựa vào kinh nghiệm riêng và bộ công cụ riêng, kết quả thiết kế cho cùng một loại
+bài toán có thể khác nhau đáng kể. Điều này gây khó khăn khi rà soát chéo, khi bàn giao giữa
+các nhóm, và khi khách hàng so sánh hồ sơ giữa các dự án.
+
+*Chi phí thực tế:* chi phí kiểm soát chất lượng tăng, và hình ảnh chuyên nghiệp của công ty
+trước khách hàng bị ảnh hưởng.
+
+### 2.3 Vì sao đến bây giờ mới giải được bài toán này
+
+Câu hỏi hợp lý từ phía lãnh đạo: bài toán quản lý tri thức không mới, vì sao các nỗ lực trước
+đây (xây dựng thư viện tài liệu, wiki nội bộ, quy định lưu hồ sơ) thường không thành công?
+
+Nguyên nhân là **chi phí đóng góp luôn cao hơn lợi ích nhận lại đối với từng cá nhân**. Để một
+wiki nội bộ hữu ích, kỹ sư phải bỏ công viết bài; nhưng người viết không phải là người hưởng
+lợi. Ngoài ra, việc tìm kiếm trong wiki vẫn dựa trên từ khoá, nên ngay cả khi nội dung đã có,
+người cần vẫn không tìm ra.
+
+Ba yếu tố công nghệ mới thay đổi bài toán này:
+
+| Yếu tố | Trước đây | Hiện nay |
+|---|---|---|
+| **Tìm kiếm theo ngữ nghĩa** | Chỉ tìm được theo từ khoá chính xác | Tìm được theo ý nghĩa câu hỏi, dù dùng từ khác |
+| **Xử lý tài liệu không cấu trúc** | Phải nhập liệu thủ công vào biểu mẫu | Máy đọc trực tiếp PDF, DOCX, bảng tính |
+| **Chi phí đóng góp tri thức** | Phải viết bài riêng | Ghi nhận ngay trong luồng làm việc, mất dưới 2 phút |
+
+Nói cách khác: công nghệ hiện tại cho phép **thu thập tri thức như một sản phẩm phụ của công
+việc thường ngày**, thay vì như một nhiệm vụ bổ sung. Đó là thay đổi quyết định.
+
+### 2.4 Cơ hội — "Trợ lý tri thức kỹ thuật số"
+
+Cơ hội của công ty không đơn thuần là "dùng AI cho hiện đại". Cơ hội là biến khối tài liệu và
+hồ sơ đang nằm im thành một **tài sản vận hành được**.
+
+Hình dung hệ thống ở trạng thái hoàn chỉnh: một trợ lý biết ba nhóm dữ liệu cùng lúc:
+
+```mermaid
+flowchart LR
+    A["Tài liệu công ty: tiêu chuẩn, quy trình, sổ tay"] --> D["Trợ lý tri thức kỹ thuật số"]
+    B["Tình huống lịch sử: bài toán, đầu vào, phương án, phê duyệt"] --> D
+    C["Hệ thống tính toán: công cụ kiểm tra, mô phỏng, truy vấn"] --> D
+    D --> E["Kỹ sư: nhận đề xuất kèm dẫn chứng"]
+    E --> F["Kỹ sư phê duyệt hoặc bác bỏ"]
+    F --> B
+```
+
+Điểm quan trọng nhất của sơ đồ là **vòng lặp khép kín ở dưới cùng**: mỗi lần kỹ sư phê duyệt
+hay bác bỏ một đề xuất, dữ liệu đó quay trở lại kho tình huống. Hệ thống càng dùng càng giàu
+tri thức, và tri thức đó thuộc về công ty, không thuộc về nhà cung cấp công nghệ nào.
+
+Đây chính là điểm khác biệt giữa việc mua một công cụ AI thương mại và việc xây dựng một hệ
+thống nội bộ: công cụ thương mại không biết gì về hồ sơ của công ty và không tích luỹ được gì
+cho công ty. Hệ thống nội bộ tích luỹ một tài sản dữ liệu mà đối thủ không có.
+
+### 2.5 Những gì hệ thống này không giải quyết
+
+Để đề xuất trung thực, cần nêu rõ giới hạn:
+
+- Hệ thống **không thay thế phần mềm phân tích kết cấu**. Nó gọi các phần mềm đó, không tính
+  thay chúng.
+- Hệ thống **không tự thiết kế** một công trình. Nó hỗ trợ ở mức từng bài toán cấu kiện và
+  từng quyết định kỹ thuật cụ thể.
+- Hệ thống **không thay thế quy trình kiểm soát chất lượng** hiện có. Nó bổ sung dữ liệu cho
+  quy trình đó.
+- Hệ thống **không cải thiện chất lượng tài liệu đầu vào**. Nếu tài liệu nội bộ mâu thuẫn hoặc
+  lỗi thời, hệ thống sẽ phản ánh đúng sự mâu thuẫn đó. Việc rà soát tài liệu là công việc của
+  con người và phải làm trước.
+
+---
