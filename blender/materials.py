@@ -64,7 +64,12 @@ MATERIALS = {
         # life is chalked by UV and dulled by dust, and 0.52 is what stops the
         # frame reading as showroom furniture. Credibility, not shine.
         "roughness": 0.52,
-        "paint_variation": 0.075,                 # roller/spray mottle depth
+        "roughness_variation": 0.13,              # uneven weathering of the film
+        # Multiplicative, so this is a *fraction* of base_color, not an
+        # absolute step. At 0.075 on a 0.055 primer the mottle was four parts
+        # in a thousand and no flange ever looked like anything but one flat
+        # value - the exact plastic read the layer exists to prevent.
+        "paint_variation": 0.40,                  # roller/spray mottle depth
         "scratch_density": 1.00,
         "scratch_roughness": 0.34,                # bare metal where paint is gone
         "bare_metal": (0.310, 0.320, 0.335),
@@ -374,9 +379,17 @@ def build_painted_metal(mat, spec):
     links.new(metal.outputs["Result"], bsdf.inputs["Metallic"])
 
     # --- roughness: mottle jitter, then polished where worn ----------------
+    # Widened from a flat +/-0.05. On a dark primer the paint mottle is almost
+    # invisible as *colour* - `_shift` is multiplicative, so +/-7.5% of a 0.055
+    # base is four parts in a thousand - but the same mottle read as roughness
+    # is plainly visible, because it changes how much sky each patch reflects.
+    # This is the same lesson as the ground plane: on a low-albedo surface,
+    # variation in reflectance sells unevenness and variation in colour does
+    # not.
+    band = spec.get("roughness_variation", 0.05)
     rough_var = _node(nodes, "ShaderNodeMapRange", -300, -80, "RoughVariation")
-    rough_var.inputs["To Min"].default_value = max(0.0, spec["roughness"] - 0.05)
-    rough_var.inputs["To Max"].default_value = min(1.0, spec["roughness"] + 0.05)
+    rough_var.inputs["To Min"].default_value = max(0.0, spec["roughness"] - band)
+    rough_var.inputs["To Max"].default_value = min(1.0, spec["roughness"] + band)
     links.new(mottle.outputs["Fac"], rough_var.inputs["Value"])
 
     rough = _node(nodes, "ShaderNodeMix", 0, -80, "Roughness",
