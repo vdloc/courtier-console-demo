@@ -1,132 +1,129 @@
 import { useEffect, useRef } from 'react';
-import { useThree } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import { Box3, Vector3 } from 'three';
+import { PerspectiveCamera, Vector3 } from 'three';
 import gsap from 'gsap';
 import { useViewerStore } from '../store/useViewerStore';
-import type { CameraShot } from '../types';
-
-/**
- * Camera shots in model coordinates, Y-up (the glTF exporter converted the
- * Blender Z-up scene on the way out, so height is +Y and the footprint lies
- * in XZ). These mirror blender/scene_setup.py so a still and the web view
- * frame the building the same way.
- */
-const SHOTS: Record<CameraShot, { position: Vector3; target: Vector3 }> = {
-  hero: {
-    position: new Vector3(58, 22, 46),
-    target: new Vector3(14.4, 6, -9),
-  },
-  // Every eye here sits above its own target. OrbitControls clamps the polar
-  // angle to keep the camera out of the ground, so a shot authored level with
-  // or below its target is silently unreachable: the controls pull it back up
-  // and the move ends somewhere other than where it was written.
-  corner: {
-    position: new Vector3(34, 7.0, 22),
-    target: new Vector3(10, 5.5, -4),
-  },
-  detail: {
-    position: new Vector3(4.2, 4.6, 3.4),
-    target: new Vector3(0.2, 3.4, 0),
-  },
-  elevation: {
-    position: new Vector3(14.4, 7.2, 120),
-    target: new Vector3(14.4, 6.8, -9),
-  },
-};
+import { CameraManager, SHOTS } from './CameraManager';
 
 // GSAP's lag smoothing freezes its clock whenever a frame takes longer than
 // half a second and then advances it by a nominal 33 ms. That is right for a
-// DOM animation catching up after a stall, and wrong here: on a weak GPU this
-// scene renders at 1-2 fps, and a 1.6 s camera move stretched to 33 ms per
-// frame takes most of a minute. Camera moves should take the time they say
-// they take, however slowly the scene draws.
+// DOM animation catching up after a stall and wrong here: on a weak GPU this
+// scene renders at one or two frames a second, and an eight-second camera move
+// stretched to 33 ms per frame would take several minutes. Cinematic moves
+// should take the time they say they take, however slowly the scene draws.
 gsap.ticker.lagSmoothing(0);
 
 /**
- * Orbit controls plus GSAP-driven camera moves.
+ * Wiring between the store and the camera manager.
  *
- * GSAP animates the controls' *target* alongside the camera position. Moving
- * the camera alone makes the building swing wildly through frame, because
- * OrbitControls keeps looking at wherever the old target was.
+ * Deliberately thin: everything about how the camera actually moves lives in
+ * CameraManager, which knows nothing about React or about this application's
+ * store. The component's whole job is to own the OrbitControls instance, turn
+ * store intent into manager calls, and drive `update` once per frame.
  */
 export function CameraRig() {
   const controls = useRef<OrbitControlsImpl>(null);
+  const manager = useRef<CameraManager | null>(null);
   const { camera } = useThree();
+
   const shot = useViewerStore((s) => s.shot);
   const shotNonce = useViewerStore((s) => s.shotNonce);
   const selected = useViewerStore((s) => s.selected);
+  const touring = useViewerStore((s) => s.touring);
+  const stopTour = useViewerStore((s) => s.stopTour);
+  const setTourShot = useViewerStore((s) => s.setTourShot);
+
+  // --- manager lifecycle -------------------------------------------------
+  useEffect(() => {
+    if (!controls.current || !(camera instanceof PerspectiveCamera)) return;
+    // The model's centre of mass, in the Y-up coordinates the exporter wrote.
+    // Every orbital path is built around it, so a wrong value here shows up as
+    // paths that clip the building rather than arcing round it.
+    const instance = new CameraManager(
+      camera,
+      controls.current,
+      new Vector3(14.4, 6, -9),
+    );
+    manager.current = instance;
+
+    // Test and profiling surface, alongside the renderer handle in Viewer.
+    const viewer = (window as unknown as { __viewer?: Record<string, unknown> })
+      .__viewer;
+    if (viewer) viewer.cameraManager = instance;
+
+    return () => {
+      instance.dispose();
+      manager.current = null;
+      if (viewer) viewer.cameraManager = undefined;
+    };
+  }, [camera]);
 
   // --- named shots -------------------------------------------------------
   useEffect(() => {
-    const config = SHOTS[shot];
-    if (!config || !controls.current) return;
+    if (useViewerStore.getState().touring) return; // the tour owns the camera
+    manager.current?.playShot(shot);
+  }, [shot, shotNonce]);
 
-    const target = controls.current.target;
-    gsap.killTweensOf([camera.position, target]);
-    gsap.to(camera.position, {
-      x: config.position.x,
-      y: config.position.y,
-      z: config.position.z,
-      duration: 1.6,
-      ease: 'power3.inOut',
-      onUpdate: () => controls.current?.update(),
-    });
-    gsap.to(target, {
-      x: config.target.x,
-      y: config.target.y,
-      z: config.target.z,
-      duration: 1.6,
-      ease: 'power3.inOut',
-      onUpdate: () => controls.current?.update(),
-    });
-  }, [shot, shotNonce, camera]);
-
-  // --- frame the selected component --------------------------------------
+  // --- focus the selected component --------------------------------------
   useEffect(() => {
-    if (!selected || !controls.current) return;
+    if (!selected || useViewerStore.getState().touring) return;
+    manager.current?.focusObject(selected.object);
+  }, [selected]);
 
-    const box = new Box3().setFromObject(selected.object);
-    const centre = box.getCenter(new Vector3());
-    const radius = Math.max(box.getSize(new Vector3()).length() * 0.5, 0.5);
+  // --- the four-shot showcase --------------------------------------------
+  useEffect(() => {
+    const instance = manager.current;
+    if (!instance) return;
 
-    // Approach along the existing view direction rather than a fixed vector,
-    // so selecting a component feels like moving closer to what you are
-    // already looking at instead of being teleported to the far side.
-    const direction = camera.position
-      .clone()
-      .sub(controls.current.target)
-      .normalize();
-    const distance = Math.max(radius * 4.5, 3);
-    const destination = centre.clone().addScaledVector(direction, distance);
+    if (!touring) {
+      // Only tear down a tour that is actually running: this effect also fires
+      // on the initial false, and stopping there would cancel the opening
+      // shot before it started.
+      if (instance.isCinematic) {
+        instance.stopSequence();
+        instance.enableOrbit();
+      }
+      return;
+    }
 
-    const target = controls.current.target;
-    gsap.killTweensOf([camera.position, target]);
-    gsap.to(camera.position, {
-      x: destination.x,
-      y: destination.y,
-      z: destination.z,
-      duration: 1.1,
-      ease: 'power2.inOut',
-      onUpdate: () => controls.current?.update(),
+    instance.playSequence({
+      onShot: (_, leg) => setTourShot(leg.name, leg.shallowFocus ?? false),
+      onComplete: () => stopTour(),
     });
-    gsap.to(target, {
-      x: centre.x,
-      y: centre.y,
-      z: centre.z,
-      duration: 1.1,
-      ease: 'power2.inOut',
-      onUpdate: () => controls.current?.update(),
-    });
-  }, [selected, camera]);
+
+    return () => {
+      instance.stopSequence();
+      instance.enableOrbit();
+    };
+  }, [touring, setTourShot, stopTour]);
+
+  // Frame order matters, and it is why this is split in two.
+  //
+  // drei's OrbitControls calls `controls.update()` from its own useFrame at
+  // priority -1. If the breathing offset were still on the camera at that
+  // moment, OrbitControls would read the wobbled position into its spherical
+  // state and integrate it - the offset would compound into a slow wander
+  // instead of staying a fixed few millimetres. So the offset comes off at
+  // priority -2, before OrbitControls looks, and goes back on at 0, after.
+  //
+  // Priorities stay negative-or-zero deliberately: in R3F a positive priority
+  // takes over the render loop entirely.
+  useFrame(() => manager.current?.beginFrame(), -2);
+  useFrame((_, delta) => manager.current?.update(delta), 0);
 
   return (
     <OrbitControls
       ref={controls}
       makeDefault
       enableDamping
-      dampingFactor={0.08}
+      // Heavier than the drei default. This is a survey instrument on a gimbal,
+      // not a game camera: the extra weight is most of what separates the two.
+      dampingFactor={0.045}
+      rotateSpeed={0.55}
+      zoomSpeed={0.7}
+      panSpeed={0.6}
       minDistance={2}
       maxDistance={220}
       // Stop the camera going under its target, which for targets 3-7 m up

@@ -18,6 +18,10 @@ export function Toolbar() {
   const toggleMeasuring = useViewerStore((s) => s.toggleMeasuring);
   const measurePoints = useViewerStore((s) => s.measurePoints);
   const clearMeasurement = useViewerStore((s) => s.clearMeasurement);
+  const touring = useViewerStore((s) => s.touring);
+  const tourShot = useViewerStore((s) => s.tourShot);
+  const startTour = useViewerStore((s) => s.startTour);
+  const stopTour = useViewerStore((s) => s.stopTour);
   const quality = useViewerStore((s) => s.quality);
   const setQuality = useViewerStore((s) => s.setQuality);
   const resetView = useViewerStore((s) => s.resetView);
@@ -40,6 +44,28 @@ export function Toolbar() {
               </button>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section className="panel-section">
+        <div className="panel-header">
+          <span className="panel-title">Presentation</span>
+        </div>
+        <div className="panel-body">
+          <div className="button-row">
+            <button
+              className="wide"
+              data-active={touring}
+              onClick={touring ? stopTour : startTour}
+            >
+              {touring ? 'Stop Tour' : 'Cinematic Tour'}
+            </button>
+          </div>
+          {touring && (
+            <div className="hint">
+              {tourShot ?? 'Starting'} · drag to take over at any point.
+            </div>
+          )}
         </div>
       </section>
 

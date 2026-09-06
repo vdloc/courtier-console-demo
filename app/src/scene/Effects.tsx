@@ -30,6 +30,11 @@ import { useViewerStore } from '../store/useViewerStore';
 export function Effects() {
   const quality = useViewerStore((s) => s.quality);
   const selected = useViewerStore((s) => s.selected);
+  // The tour's connection-detail leg asks for the shallow look explicitly; a
+  // selection implies it. Either way depth of field is only ever on when the
+  // camera is close to one thing, never over a wide shot of the whole frame.
+  const shallowFocus = useViewerStore((s) => s.shallowFocus);
+  const shallow = shallowFocus || selected !== null;
 
   // SSAO needs the composer's normal pass, which is a second full-scene
   // render. On an integrated GPU with ~3000 draw calls that is the difference
@@ -72,7 +77,7 @@ export function Effects() {
         color={undefined}
         blendFunction={BlendFunction.MULTIPLY}
       />
-      {high && selected ? (
+      {high && shallow ? (
         // Depth of field only once something is selected: a shallow focus
         // plane on an overview shot just blurs the building.
         <DepthOfField

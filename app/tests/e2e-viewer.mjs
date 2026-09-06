@@ -204,30 +204,38 @@ const pickPoint = (opts = {}) =>
   }, opts);
 
 /**
- * Wait until the camera stops moving.
+ * Wait until the camera arrives at an expected position.
  *
- * A GSAP shot runs 1.6 s but only advances on rendered frames, and under
- * SwiftShader those arrive once or twice a second. So a single still sample
- * proves nothing - it usually means the tween has not had a frame yet. Demand
- * several consecutive still samples and a floor on elapsed time, or the
- * assertion that follows reads the position of the PREVIOUS shot.
+ * Deliberately NOT "wait until it stops": the camera manager keeps a slow idle
+ * drift and a sub-centimetre breathing offset running, so it is never
+ * completely still and a stillness poll would either spin or trip on the first
+ * frame that has not rendered yet. Arrival is the property under test anyway.
  */
-async function cameraSettled(timeout = 25000) {
+async function cameraReaches(expected, tolerance = 1.5, timeout = 40000) {
   const started = Date.now();
-  let previous = await cameraPosition();
-  let stable = 0;
+  let last = await cameraPosition();
   while (Date.now() - started < timeout) {
-    await page.waitForTimeout(300);
-    const current = await cameraPosition();
-    const moved = current.reduce(
-      (acc, v, i) => acc + Math.abs(v - previous[i]),
-      0,
-    );
-    previous = current;
-    stable = moved < 0.02 ? stable + 1 : 0;
-    if (stable >= 5 && Date.now() - started > 3000) return true;
+    last = await cameraPosition();
+    if (expected.every((v, i) => near(last[i], v, tolerance))) {
+      return { ok: true, position: last };
+    }
+    await page.waitForTimeout(250);
   }
-  return false;
+  return { ok: false, position: last };
+}
+
+/** Wait for the camera manager to report that no move is running. */
+async function moveFinished(timeout = 40000) {
+  try {
+    await page.waitForFunction(
+      () => window.__viewer.cameraManager?.isMoving === false,
+      null,
+      { timeout },
+    );
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -237,17 +245,23 @@ async function cameraSettled(timeout = 25000) {
  * wall-clock terms is a function of frame rate, not of the easing constant.
  * Poll the geometry until it stops moving rather than guessing a duration.
  */
-async function explodeSettled(timeout = 30000) {
+async function explodeSettled(timeout = 40000) {
   const started = Date.now();
-  let previous = null;
+  const initial = (await modelMetrics()).extent[0];
+  let previous = initial;
   let stable = 0;
+  let moved = false;
   while (Date.now() - started < timeout) {
     await page.waitForTimeout(400);
     const current = (await modelMetrics()).extent[0];
-    stable =
-      previous !== null && Math.abs(current - previous) < 0.005 ? stable + 1 : 0;
+    if (Math.abs(current - initial) > 0.05) moved = true;
+    stable = Math.abs(current - previous) < 0.005 ? stable + 1 : 0;
     previous = current;
-    if (stable >= 3) return true;
+    // Stability alone is not arrival: the easing is started by a React effect
+    // and driven by rendered frames, so the first samples after a click are
+    // still the OLD value sitting perfectly still. Wait until something has
+    // actually moved before believing the stillness.
+    if (moved && stable >= 3) return true;
   }
   return false;
 }
@@ -410,18 +424,109 @@ for (const [label, expected] of Object.entries(EXPECTED)) {
     .locator('.panel-left')
     .getByRole('button', { name: label, exact: true });
   await button.click();
-  await cameraSettled();
-  const position = await cameraPosition();
+  // Sample at the moment the move reports finished. Polling "eventually near"
+  // is the wrong test here: the camera lands exactly on the shot and the idle
+  // drift then walks it slowly away, so a late sample measures the drift
+  // rather than the arrival.
+  await page
+    .waitForFunction(
+      () => window.__viewer.cameraManager?.isMoving === true,
+      null,
+      { timeout: 15000 },
+    )
+    .catch(() => {});
+  await moveFinished();
+  // The tween completing and the frame that applies its final transform are
+  // two different events, and under SwiftShader they can be a second apart.
+  // 1.2 s covers that and still sits well inside the 3.5 s the manager waits
+  // before the idle drift starts, so this measures arrival, not drift.
+  await page.waitForTimeout(1200);
+  const arrived = await cameraPosition();
   check(
     `${label}: button marked active`,
     (await button.getAttribute('data-active')) === 'true',
   );
   check(
     `${label}: camera reached the shot`,
-    expected.every((v, i) => near(position[i], v, 1.5)),
-    `${position.map((v) => v.toFixed(1))} vs ${expected}`,
+    expected.every((v, i) => near(arrived[i], v, 1.5)),
+    `${arrived.map((v) => v.toFixed(1))} vs ${expected}`,
   );
 }
+
+// The whole point of the polar spline is that a move arcs AROUND the building
+// instead of taking the chord through it. Sample the path from the far
+// elevation shot to the interior joint - the one transition whose straight
+// line would pass clean through the frame - and check it keeps its distance.
+console.log('\n4b. Path shape');
+await page
+  .locator('.panel-left')
+  .getByRole('button', { name: 'Elevation', exact: true })
+  .click();
+await cameraReaches([14.4, 7.2, 120]);
+
+const CENTRE = [14.4, 6, -9];
+const radial = (p) => Math.hypot(p[0] - CENTRE[0], p[2] - CENTRE[2]);
+await page
+  .locator('.panel-left')
+  .getByRole('button', { name: 'Joint', exact: true })
+  .click();
+
+// The move is started by a React effect, so it is not running the instant the
+// click returns; sampling immediately would capture one frame and stop.
+await page.waitForFunction(
+  () => window.__viewer.cameraManager?.isMoving === true,
+  null,
+  { timeout: 15000 },
+);
+const samples = [];
+for (let i = 0; i < 40; i += 1) {
+  samples.push(await cameraPosition());
+  await page.waitForTimeout(250);
+  // Only allow an early exit once there is enough of a trace to judge: at one
+  // or two frames a second a single `isMoving === false` reading proves
+  // nothing about whether the move happened.
+  if (
+    samples.length >= 8 &&
+    (await page.evaluate(
+      () => window.__viewer.cameraManager?.isMoving === false,
+    ))
+  ) {
+    break;
+  }
+}
+check('transition samples were captured', samples.length >= 5, `${samples.length} samples`);
+
+// Deviation from the straight line between the endpoints is the frame-rate
+// independent way to tell an arc from a chord: consecutive-sample deltas are
+// useless here, because at one or two frames a second a legitimate move
+// covers tens of metres between samples.
+const first = samples[0];
+const last = samples[samples.length - 1];
+const axis = [last[0] - first[0], last[1] - first[1], last[2] - first[2]];
+const axisLength = Math.hypot(...axis) || 1;
+const unit = axis.map((v) => v / axisLength);
+
+let maxDeviation = 0;
+for (const p of samples) {
+  const rel = [p[0] - first[0], p[1] - first[1], p[2] - first[2]];
+  const along = rel[0] * unit[0] + rel[1] * unit[1] + rel[2] * unit[2];
+  const perpendicular = Math.hypot(
+    rel[0] - unit[0] * along,
+    rel[1] - unit[1] * along,
+    rel[2] - unit[2] * along,
+  );
+  maxDeviation = Math.max(maxDeviation, perpendicular);
+}
+check(
+  'the path arcs around the model instead of taking the chord',
+  maxDeviation > 2,
+  `max deviation from the straight line ${maxDeviation.toFixed(2)} m`,
+);
+check(
+  'the path keeps its distance from the structure',
+  Math.min(...samples.map(radial)) > 3,
+  `closest radial approach ${Math.min(...samples.map(radial)).toFixed(1)} m`,
+);
 
 // --- 5. Explode ------------------------------------------------------------
 console.log('\n5. Exploded view');
@@ -429,7 +534,8 @@ await page
   .locator('.panel-left')
   .getByRole('button', { name: 'Hero', exact: true })
   .click();
-await cameraSettled();
+await cameraReaches([58, 22, 46]);
+await moveFinished();
 const compact = await modelMetrics();
 
 const explodeButton = page.getByRole('button', { name: 'Explode View' });
@@ -672,7 +778,7 @@ await explodeButton.click();
 await page.waitForTimeout(500);
 
 await page.getByRole('button', { name: 'Reset View' }).click();
-await cameraSettled();
+const resetArrival = await cameraReaches([58, 22, 46]);
 await page.waitForTimeout(1600);
 
 const afterReset = await state();
@@ -683,11 +789,10 @@ check(
 );
 check('reset collapses the explode', afterReset.explodeFactor === 0);
 check('reset returns to the hero shot', afterReset.shot === 'hero');
-const resetCamera = await cameraPosition();
 check(
   'reset moves the camera home',
-  [58, 22, 46].every((v, i) => near(resetCamera[i], v, 1.5)),
-  `${resetCamera.map((v) => v.toFixed(1))}`,
+  resetArrival.ok,
+  `${resetArrival.position.map((v) => v.toFixed(1))}`,
 );
 
 const afterResetModel = await modelMetrics();
@@ -697,8 +802,103 @@ check(
   `mean node scale ${afterResetModel.meanScale.toFixed(4)}`,
 );
 
-// --- 10. Console -----------------------------------------------------------
-console.log('\n10. Console');
+// --- 10. Cinematic tour ----------------------------------------------------
+console.log('\n10. Cinematic tour');
+const tourButton = page.getByRole('button', { name: 'Cinematic Tour' });
+const beforeTour = await cameraPosition();
+await tourButton.click();
+await page.waitForTimeout(400);
+
+check('tour engaged', (await page.evaluate(() =>
+  window.__viewer.store.getState().touring)) === true);
+check(
+  'orbit input is taken away while the tour runs',
+  await page.evaluate(() => window.__viewer.cameraManager.isCinematic === true),
+);
+
+// The caption names the leg on screen, which is also proof the sequence is
+// stepping rather than running one long move.
+await page.waitForFunction(
+  () => window.__viewer.store.getState().tourShot !== null,
+  null,
+  { timeout: 20000 },
+);
+const firstLeg = await page.evaluate(
+  () => window.__viewer.store.getState().tourShot,
+);
+check('first leg is the hero introduction', firstLeg === 'Hero introduction', firstLeg);
+
+// The opening leg accelerates slowly on purpose - `power2.inOut` over eight
+// seconds has barely left the mark at three - so give it time to be moving
+// before asking whether it moved.
+let duringTour = beforeTour;
+const travelStarted = Date.now();
+while (Date.now() - travelStarted < 30000) {
+  await page.waitForTimeout(500);
+  duringTour = await cameraPosition();
+  const travelled = Math.hypot(
+    duringTour[0] - beforeTour[0],
+    duringTour[1] - beforeTour[1],
+    duringTour[2] - beforeTour[2],
+  );
+  if (travelled > 4) break;
+}
+check(
+  'the tour actually flies the camera',
+  Math.hypot(
+    duringTour[0] - beforeTour[0],
+    duringTour[1] - beforeTour[1],
+    duringTour[2] - beforeTour[2],
+  ) > 4,
+  `${beforeTour.map((v) => v.toFixed(1))} -> ${duringTour.map((v) => v.toFixed(1))}`,
+);
+
+// Handover is where a jump normally shows. The property that matters is not
+// the raw position delta - under SwiftShader the camera legitimately travels
+// several metres in the last frame before the click lands, which no assertion
+// can separate from a jump. What must hold is that OrbitControls adopts the
+// view the animation ended on: its target has to sit on the camera's own
+// forward axis, or its first update swings the view to look somewhere else.
+await page.getByRole('button', { name: 'Stop Tour' }).click();
+await page.waitForTimeout(900);
+check(
+  'tour stopped',
+  (await page.evaluate(() => window.__viewer.store.getState().touring)) ===
+    false,
+);
+check(
+  'orbit control is handed back',
+  await page.evaluate(
+    () => window.__viewer.cameraManager.isCinematic === false,
+  ),
+);
+
+const handover = await page.evaluate(() => {
+  const { camera, cameraManager } = window.__viewer;
+  const controls = cameraManager.controls;
+  const forward = camera.position.clone();
+  forward.set(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
+  const toTarget = controls.target.clone().sub(camera.position);
+  const distance = toTarget.length();
+  return {
+    distance,
+    // Degrees between where the camera looks and where the controls think it
+    // looks. Anything but ~0 is a visible snap the moment input goes live.
+    error: (Math.acos(
+      Math.min(1, Math.max(-1, forward.dot(toTarget.normalize()))),
+    ) * 180) / Math.PI,
+    enabled: controls.enabled,
+  };
+});
+check('controls are live again', handover.enabled === true);
+check(
+  'controls adopt the camera view without a snap',
+  handover.error < 2,
+  `${handover.error.toFixed(2)} degrees off, target ${handover.distance.toFixed(1)} m ahead`,
+);
+
+// --- 11. Console -----------------------------------------------------------
+console.log('\n11. Console');
 const unique = [...new Set(consoleErrors)];
 check(
   'no console errors over the whole run',

@@ -50,6 +50,18 @@ interface ViewerState {
   measurePoints: MeasurementPoint[];
   quality: 'high' | 'balanced' | 'performance';
 
+  // --- cinematic tour ----------------------------------------------------
+  /** Whether the four-shot showcase is running. */
+  touring: boolean;
+  /** Name of the leg currently on screen, for the caption. */
+  tourShot: string | null;
+  /**
+   * Whether the current leg calls for the shallow-focus look. Held here
+   * rather than read from the camera so the post stack does not have to reach
+   * into the scene graph for it.
+   */
+  shallowFocus: boolean;
+
   // --- actions ----------------------------------------------------------
   setReady: (ready: boolean) => void;
   setLoadProgress: (value: number) => void;
@@ -75,6 +87,9 @@ interface ViewerState {
   addMeasurePoint: (point: MeasurementPoint) => void;
   clearMeasurement: () => void;
   setQuality: (quality: ViewerState['quality']) => void;
+  startTour: () => void;
+  stopTour: () => void;
+  setTourShot: (name: string | null, shallowFocus: boolean) => void;
   resetView: () => void;
 }
 
@@ -107,6 +122,10 @@ export const useViewerStore = create<ViewerState>((set) => ({
   // Balanced by default: 'high' turns on contact shadows and the widest LOD
   // distances, which is a deliberate choice rather than a starting point.
   quality: 'balanced',
+
+  touring: false,
+  tourShot: null,
+  shallowFocus: false,
 
   setReady: (ready) => set({ ready }),
   setLoadProgress: (loadProgress) => set({ loadProgress }),
@@ -182,6 +201,21 @@ export const useViewerStore = create<ViewerState>((set) => ({
     })),
   clearMeasurement: () => set({ measurePoints: [] }),
   setQuality: (quality) => set({ quality }),
+
+  // The tour drives the camera and takes the controls away while it runs, so
+  // it clears anything that would fight it for the frame.
+  startTour: () =>
+    set({
+      touring: true,
+      selected: null,
+      exploded: false,
+      explodeFactor: 0,
+      measuring: false,
+      measurePoints: [],
+    }),
+  stopTour: () => set({ touring: false, tourShot: null, shallowFocus: false }),
+  setTourShot: (tourShot, shallowFocus) => set({ tourShot, shallowFocus }),
+
   resetView: () =>
     set((state) => ({
       selected: null,
@@ -190,6 +224,9 @@ export const useViewerStore = create<ViewerState>((set) => ({
       explodeFactor: 0,
       measuring: false,
       measurePoints: [],
+      touring: false,
+      tourShot: null,
+      shallowFocus: false,
       layers: allLayersVisible(),
       // Reset the VIEW, not the building. Seeking to 0 here would park every
       // member at the construction clip's first frame - underground and at
