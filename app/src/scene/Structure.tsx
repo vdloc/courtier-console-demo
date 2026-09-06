@@ -22,6 +22,14 @@ useGLTF.preload(MODEL_URL, DRACO_PATH);
 
 interface ExplodeRecord {
   object: Object3D;
+  /**
+   * Where the member sits when it is not exploded.
+   *
+   * Captured when an explode STARTS, never at mount. At mount every node
+   * still holds the construction clip's parked transform, so a home recorded
+   * there would send the whole frame back underground the moment the user
+   * collapsed the exploded view.
+   */
   home: Vector3;
   offset: Vector3;
 }
@@ -67,6 +75,8 @@ export function Structure() {
   const sequenceRef = useRef<ConstructionSequence | null>(null);
   const explodeRef = useRef<ExplodeRecord[]>([]);
   const appliedExplode = useRef(0);
+  /** Whether `record.home` currently holds a valid rest pose. */
+  const explodeHome = useRef(false);
 
   const setReady = useViewerStore((s) => s.setReady);
   const select = useViewerStore((s) => s.select);
@@ -96,6 +106,8 @@ export function Structure() {
       offset.y *= 1.6;
       offset.multiplyScalar(0.35);
       records.push({ object, home: object.position.clone(), offset });
+      // `home` is re-read when an explode begins; the value stored here is a
+      // placeholder so the field is never undefined.
     });
 
     explodeRef.current = records;
@@ -143,6 +155,14 @@ export function Structure() {
       if (store.seekRequest !== null) {
         sequence.seek(store.seekRequest);
         clearSeek();
+        // Report the new position immediately. The mixer only reports through
+        // the `playing` branch below, so a scrub while idle or paused moved
+        // the model without the readout, the fill bar or the phase label ever
+        // catching up.
+        setProgress(sequence.progress);
+        // The clip owns every node transform, so an explode measured against
+        // the old pose is stale the moment the playhead moves.
+        explodeHome.current = false;
       }
       if (store.playback === 'playing') {
         sequence.start();
@@ -156,6 +176,17 @@ export function Structure() {
     // Explode is eased here rather than with a tween per object: 3000 GSAP
     // tweens would cost more than the render itself.
     const target = store.explodeFactor;
+
+    // Snapshot the rest pose the moment an explode leaves zero. Doing it here
+    // rather than at mount is what makes the offsets relative to whatever the
+    // construction clip last wrote, instead of to its parked first frame.
+    if (target > 0 && !explodeHome.current) {
+      for (const record of explodeRef.current) {
+        record.home.copy(record.object.position);
+      }
+      explodeHome.current = true;
+    }
+
     if (Math.abs(appliedExplode.current - target) > 0.001) {
       appliedExplode.current = MathUtils.damp(
         appliedExplode.current,
@@ -163,11 +194,18 @@ export function Structure() {
         4,
         delta,
       );
+      // Damping is asymptotic; snap the last fraction so a collapsed explode
+      // leaves the members exactly where they started rather than a few
+      // millimetres out, which would accumulate over repeated toggles.
+      if (Math.abs(appliedExplode.current - target) <= 0.002) {
+        appliedExplode.current = target;
+      }
       for (const record of explodeRef.current) {
         record.object.position
           .copy(record.home)
           .addScaledVector(record.offset, appliedExplode.current);
       }
+      if (appliedExplode.current === 0) explodeHome.current = false;
     }
   });
 
@@ -201,6 +239,29 @@ export function Structure() {
     [select],
   );
 
+  /**
+   * Measurement picking.
+   *
+   * The measure tool draws its own result but cannot capture its own input:
+   * an invisible catcher plane large enough to sit in front of the frame
+   * would swallow every selection click. So the model itself is the capture
+   * surface, and the hit point comes from the raycast rather than from the
+   * object's origin - a site dimension is between the faces you pointed at,
+   * not between centroids half a section depth away.
+   */
+  const onPointerDown = useMemo(
+    () => (event: ThreeEvent<PointerEvent>) => {
+      const store = useViewerStore.getState();
+      if (!store.measuring) return;
+      event.stopPropagation();
+      store.addMeasurePoint({
+        position: [event.point.x, event.point.y, event.point.z],
+        objectName: event.object.name,
+      });
+    },
+    [],
+  );
+
   const onPointerOver = useMemo(
     () => (event: ThreeEvent<PointerEvent>) => {
       event.stopPropagation();
@@ -230,6 +291,7 @@ export function Structure() {
     <primitive
       object={scene}
       onClick={onClick}
+      onPointerDown={onPointerDown}
       onPointerOver={onPointerOver}
       onPointerOut={onPointerOut}
     />

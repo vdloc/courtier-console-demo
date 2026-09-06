@@ -18,8 +18,12 @@ const SHOTS: Record<CameraShot, { position: Vector3; target: Vector3 }> = {
     position: new Vector3(58, 22, 46),
     target: new Vector3(14.4, 6, -9),
   },
+  // Every eye here sits above its own target. OrbitControls clamps the polar
+  // angle to keep the camera out of the ground, so a shot authored level with
+  // or below its target is silently unreachable: the controls pull it back up
+  // and the move ends somewhere other than where it was written.
   corner: {
-    position: new Vector3(34, 4.2, 22),
+    position: new Vector3(34, 7.0, 22),
     target: new Vector3(10, 5.5, -4),
   },
   detail: {
@@ -27,10 +31,18 @@ const SHOTS: Record<CameraShot, { position: Vector3; target: Vector3 }> = {
     target: new Vector3(0.2, 3.4, 0),
   },
   elevation: {
-    position: new Vector3(14.4, 6.8, 120),
+    position: new Vector3(14.4, 7.2, 120),
     target: new Vector3(14.4, 6.8, -9),
   },
 };
+
+// GSAP's lag smoothing freezes its clock whenever a frame takes longer than
+// half a second and then advances it by a nominal 33 ms. That is right for a
+// DOM animation catching up after a stall, and wrong here: on a weak GPU this
+// scene renders at 1-2 fps, and a 1.6 s camera move stretched to 33 ms per
+// frame takes most of a minute. Camera moves should take the time they say
+// they take, however slowly the scene draws.
+gsap.ticker.lagSmoothing(0);
 
 /**
  * Orbit controls plus GSAP-driven camera moves.
@@ -117,9 +129,12 @@ export function CameraRig() {
       dampingFactor={0.08}
       minDistance={2}
       maxDistance={220}
-      // Stop the camera going under the ground plane: looking up at a
-      // building through its own foundations is the classic broken-orbit look.
-      maxPolarAngle={Math.PI * 0.495}
+      // Stop the camera going under its target, which for targets 3-7 m up
+      // keeps it well clear of the ground plane: looking up at a building
+      // through its own foundations is the classic broken-orbit look. The
+      // limit is exactly a right angle rather than just under it so a level
+      // elevation shot is reachable.
+      maxPolarAngle={Math.PI / 2}
       target={SHOTS.hero.target.clone()}
     />
   );

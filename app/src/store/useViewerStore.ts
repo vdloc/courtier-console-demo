@@ -191,9 +191,14 @@ export const useViewerStore = create<ViewerState>((set) => ({
       measuring: false,
       measurePoints: [],
       layers: allLayersVisible(),
+      // Reset the VIEW, not the building. Seeking to 0 here would park every
+      // member at the construction clip's first frame - underground and at
+      // one-thousandth scale - so "Reset View" would empty the site, which is
+      // the opposite of the state the viewer deliberately opens in. Rewinding
+      // the sequence is what the timeline's own Reset is for.
       playback: 'idle',
-      progress: 0,
-      seekRequest: 0,
+      progress: 1,
+      seekRequest: 1,
       shot: 'hero',
       shotNonce: state.shotNonce + 1,
     })),

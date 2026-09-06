@@ -36,10 +36,18 @@ export function Viewer() {
       shadows={{ type: PCFSoftShadowMap }}
       dpr={quality === 'high' ? [1, 2] : [1, 1.5]}
       camera={{ position: [58, 22, 46], fov: 38, near: 0.1, far: 800 }}
-      onCreated={({ gl }) => {
-        // Exposed for profiling in the browser console; harmless in prod and
-        // the only way to see draw-call counts from outside React.
-        (window as unknown as { __gl?: unknown }).__gl = gl;
+      onCreated={({ gl, scene, camera }) => {
+        // Exposed for profiling in the browser console and for the end-to-end
+        // suite. Without a handle on the scene graph a test can only assert
+        // that a button turned blue; with one it can assert that the group the
+        // button controls actually became invisible, which is the thing that
+        // matters.
+        (window as unknown as { __viewer?: unknown }).__viewer = {
+          gl,
+          scene,
+          camera,
+          store: useViewerStore,
+        };
       }}
       gl={{
         antialias: false,           // SMAA in the composer handles this
