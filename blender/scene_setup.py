@@ -25,8 +25,10 @@ Build the frame and render in one pass:
 
 import math
 import os
+import random
 import sys
 
+import bmesh
 import bpy
 from mathutils import Vector
 
@@ -361,6 +363,266 @@ def build_ground_material(mat):
 
 
 # ---------------------------------------------------------------------------
+# Site context
+# ---------------------------------------------------------------------------
+
+# Everything here is at its real dimension, because that is the entire point.
+# A viewer who has stood on a site knows how big a shipping container is, how
+# tall a hoarding panel comes on a person, and how long a bundle of sections
+# is. Those known objects are what give the frame its scale - the structure
+# cannot do it alone, because the viewer has no prior for "four-storey steel
+# frame" the way they do for "skip". Get one of these dimensions wrong and it
+# reads worse than having nothing there at all.
+SITE = {
+    # Hoarding: 2.0 m ply panels, the UK site standard.
+    "hoard_height": 2.0,
+    "hoard_panel": 3.5,
+    "hoard_gap": 0.04,             # panels butt, they do not weld
+    "hoard_offset": 14.0,          # from the frame's footprint
+    "hoard_colour": (0.030, 0.075, 0.115),   # site blue, weathered
+
+    # ISO shipping container, to the millimetre. The most recognisable
+    # yardstick on any site.
+    "cabin": (6.058, 2.438, 2.591),
+    "cabin_colour": (0.215, 0.205, 0.185),
+
+    # Bundled sections on timber bearers, cut to the 7.2 m grid because that
+    # is what they are for.
+    "bundle": (7.2, 0.90, 0.55),
+    "bearer": (0.15, 1.10, 0.15),
+
+    # Jersey barrier, 3.0 m unit.
+    "barrier": (3.0, 0.60, 0.82),
+
+    # Builder's skip, 8-yard.
+    "skip": (3.55, 1.75, 1.30),
+    "skip_colour": (0.180, 0.055, 0.020),    # oxide red, scuffed
+
+    "aggregate_colour": (0.075, 0.068, 0.058),
+}
+
+
+def _flat_material(name, rgb, roughness=0.85, metallic=0.0):
+    """One-BSDF material. Site props do not need the procedural library.
+
+    Deliberately not added to materials.py: that table is walked by
+    optimize_export.flatten_materials_for_web to write the GLB's material set,
+    and site dressing has no business in the structural model's materials.
+    """
+    mat = bpy.data.materials.get(name) or bpy.data.materials.new(name)
+    nodes, links = _reset(mat)
+    out = nodes.new("ShaderNodeOutputMaterial")
+    out.location = (300, 0)
+    bsdf = nodes.new("ShaderNodeBsdfPrincipled")
+    bsdf.location = (0, 0)
+    bsdf.inputs["Base Color"].default_value = _rgba(rgb)
+    bsdf.inputs["Roughness"].default_value = roughness
+    bsdf.inputs["Metallic"].default_value = metallic
+    links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
+    return mat
+
+
+def _site_box(name, size, location, collection, material, rotation_z=0.0):
+    """An axis-aligned box of a given real size, placed by its centre."""
+    mesh = bpy.data.meshes.new(name)
+    obj = bpy.data.objects.new(name, mesh)
+
+    bm = bmesh.new()
+    bmesh.ops.create_cube(bm, size=1.0)
+    bmesh.ops.scale(bm, vec=Vector(size), verts=bm.verts)
+    bm.to_mesh(mesh)
+    bm.free()
+
+    obj.location = location
+    obj.rotation_euler = (0.0, 0.0, rotation_z)
+    obj.data.materials.append(material)
+    collection.objects.link(obj)
+    return obj
+
+
+def build_site_context(rng_seed=7):
+    """A working site around the frame: hoarding, compound, laydown, spoil.
+
+    This is the largest single step from "technical 3D model" to "construction
+    visualization", and it is not a rendering trick - it is the difference
+    between a structure photographed somewhere and a structure photographed
+    nowhere. An empty 400 m plane tells the viewer the frame is a CAD export.
+    A hoarding line, a container compound and a laydown area tell them it is a
+    job, and every one of those objects is also a scale reference.
+
+    Kept in its own `SiteContext` collection, outside the `VF_Structure`
+    hierarchy, for two reasons: the web viewer's layer filtering and selection
+    walk that hierarchy and must not see site dressing as structure, and this
+    function is only ever called from scene_setup, which the export pipeline
+    does not run. The GLB is unaffected.
+
+    Everything is placed with a seeded RNG. Site objects are never square to
+    the grid - a container dropped by a HIAB lands a few degrees off, and a
+    perfectly aligned site is the tell that gives away a generated one.
+    """
+    existing = bpy.data.collections.get("SiteContext")
+    if existing:
+        for obj in list(existing.objects):
+            bpy.data.objects.remove(obj, do_unlink=True)
+        bpy.data.collections.remove(existing)
+
+    site = bpy.data.collections.new("SiteContext")
+    bpy.context.scene.collection.children.link(site)
+
+    rng = random.Random(rng_seed)
+    jitter = lambda spread: math.radians(rng.uniform(-spread, spread))
+
+    hoard_mat = _flat_material("MAT_Site_Hoarding", SITE["hoard_colour"], 0.78)
+    cabin_mat = _flat_material("MAT_Site_Cabin", SITE["cabin_colour"], 0.62,
+                               metallic=0.35)
+    steel_mat = _flat_material("MAT_Site_Bundle", (0.048, 0.052, 0.058), 0.58,
+                               metallic=0.25)
+    timber_mat = _flat_material("MAT_Site_Timber", (0.105, 0.072, 0.042), 0.92)
+    skip_mat = _flat_material("MAT_Site_Skip", SITE["skip_colour"], 0.72,
+                              metallic=0.20)
+    agg_mat = _flat_material("MAT_Site_Aggregate",
+                             SITE["aggregate_colour"], 0.96)
+    conc_mat = (bpy.data.materials.get("MAT_Concrete")
+                or _flat_material("MAT_Site_Concrete", (0.30, 0.294, 0.28)))
+
+    ground_z = -0.80
+    off = SITE["hoard_offset"]
+    x0, x1 = 0.0 - off, 28.8 + off
+    y0, y1 = 0.0 - off, 18.0 + off
+
+    # --- hoarding ----------------------------------------------------------
+    # A continuous line with one gap for the gate. The gap matters: an
+    # unbroken perimeter has no way in, and a site with no way in is a fence
+    # around a model rather than a site.
+    panel = SITE["hoard_panel"]
+    height = SITE["hoard_height"]
+    thickness = 0.045
+    gate_centre = (x0 + x1) / 2.0 + 6.0
+    gate_half = 5.0
+
+    def run(start, end, axis, fixed, tag, gated=False):
+        length = end - start
+        count = max(1, int(length // (panel + SITE["hoard_gap"])))
+        step = length / count
+        for i in range(count):
+            centre = start + step * (i + 0.5)
+            if gated and abs(centre - gate_centre) < gate_half:
+                continue                       # the gate opening
+            size = ((step - SITE["hoard_gap"], thickness, height) if axis == "x"
+                    else (thickness, step - SITE["hoard_gap"], height))
+            location = ((centre, fixed, ground_z + height / 2.0) if axis == "x"
+                        else (fixed, centre, ground_z + height / 2.0))
+            _site_box("Site_Hoarding_%s_%02d" % (tag, i), size,
+                      location, site, hoard_mat, jitter(0.5))
+
+    # All four sides. The far runs are the ones that matter most: they are
+    # what the camera sees *behind* the frame, and a boundary behind the
+    # subject is what stops the ground reading as an infinite plane. The near
+    # run is mostly below the frame edge from the hero camera and earns its
+    # keep on the lower shots instead.
+    run(x0, x1, "x", y0, "NEAR", gated=True)
+    run(x0, x1, "x", y1, "FAR")
+    run(y0, y1, "y", x1, "RIGHT")
+    run(y0, y1, "y", x0, "LEFT")
+
+    # --- compound: three containers, two down and one stacked --------------
+    # Beyond the frame's far-right corner, inside the hoarding.
+    #
+    # Position here is a sight-line problem, not a site-planning one. The hero
+    # camera sits at +X/-Y, so anything placed off the frame's *left* is seen
+    # through four storeys of steel and disappears - a compound on the far
+    # left rendered as nothing at all. The clear ground from this camera is
+    # right of x=28.8 and the near foreground, so the middle distance has to
+    # be built there.
+    base = Vector((x1 - 7.0, y1 - 10.0, 0.0))
+    cabin = SITE["cabin"]
+    for index, (dx, dy, dz) in enumerate(((0.0, 0.0, 0.0),
+                                          (0.0, 2.72, 0.0),
+                                          (0.35, 1.36, cabin[2]))):
+        _site_box("Site_Cabin_%02d" % index, cabin,
+                  (base.x + dx, base.y + dy,
+                   ground_z + cabin[2] / 2.0 + dz),
+                  site, cabin_mat, jitter(1.6))
+
+    # --- laydown: bundled sections on bearers ------------------------------
+    bundle, bearer = SITE["bundle"], SITE["bearer"]
+    for index in range(4):
+        y = y0 + 6.4 + index * 1.45
+        x = 4.0 + rng.uniform(-0.35, 0.35)
+        yaw = jitter(1.2)
+        for end in (-1, 1):
+            _site_box("Site_Bearer_%02d_%s" % (index, "AB"[end > 0]), bearer,
+                      (x + end * bundle[0] * 0.34, y,
+                       ground_z + bearer[2] / 2.0), site, timber_mat, yaw)
+        _site_box("Site_Bundle_%02d" % index, bundle,
+                  (x, y, ground_z + bearer[2] + bundle[2] / 2.0),
+                  site, steel_mat, yaw)
+
+    # --- jersey barriers, guiding the haul route to the gate ---------------
+    barrier = SITE["barrier"]
+    for index in range(7):
+        _site_box("Site_Barrier_%02d" % index, barrier,
+                  (gate_centre - 9.0 + index * (barrier[0] + 0.12),
+                   y0 + 7.5 + rng.uniform(-0.2, 0.2),
+                   ground_z + barrier[2] / 2.0),
+                  site, conc_mat, jitter(1.0))
+
+    # --- skip --------------------------------------------------------------
+    _site_box("Site_Skip", SITE["skip"],
+              (x1 - 20.0, y0 + 4.2, ground_z + SITE["skip"][2] / 2.0),
+              site, skip_mat, jitter(4.0))
+
+    # --- spoil heaps -------------------------------------------------------
+    # Cones, not spheres: excavated material stands at its angle of repose,
+    # about 34 degrees for damp granular fill, and a dome reads as a bin bag.
+    for index, (cx, cy, radius) in enumerate(((x1 - 6.0, y1 - 19.0, 3.4),
+                                              (x1 - 10.5, y1 - 24.0, 2.5))):
+        depth = radius * math.tan(math.radians(34.0))
+        bpy.ops.mesh.primitive_cone_add(
+            vertices=24, radius1=radius, radius2=radius * 0.12, depth=depth,
+            location=(cx, cy, ground_z + depth / 2.0))
+        heap = bpy.context.active_object
+        heap.name = "Site_Spoil_%02d" % index
+        heap.data.materials.append(agg_mat)
+        for coll in list(heap.users_collection):
+            coll.objects.unlink(heap)
+        site.objects.link(heap)
+
+    # --- context beyond the hoarding ---------------------------------------
+    # The reason the first two attempts at this still read as empty: a fence
+    # in a void is a void with a fence in it. What makes a site look like a
+    # place is what is happening *outside* its boundary - the neighbouring
+    # sheds, the treeline, the fact that the horizon is occupied. Massing
+    # blocks at 110-190 m do that for almost nothing: at that distance they
+    # are silhouettes, so their shape budget is a box, and the sky's aerosol
+    # term greys them into aerial perspective on its own.
+    #
+    # They also give the hard sky/ground horizon something to break against,
+    # which was a separate item on the audit.
+    context = bpy.data.collections.new("SiteSurrounds")
+    site.children.link(context)
+    mass_mat = _flat_material("MAT_Site_Surrounds", (0.052, 0.055, 0.058), 0.94)
+
+    centre = Vector(((x0 + x1) / 2.0, (y0 + y1) / 2.0, 0.0))
+    for index in range(24):
+        angle = (index / 24.0) * math.tau + rng.uniform(-0.05, 0.05)
+        radius = rng.uniform(110.0, 190.0)
+        width = rng.uniform(16.0, 46.0)
+        depth = rng.uniform(14.0, 38.0)
+        tall = rng.uniform(5.0, 16.0)
+        _site_box("Site_Surround_%02d" % index, (width, depth, tall),
+                  (centre.x + math.cos(angle) * radius,
+                   centre.y + math.sin(angle) * radius,
+                   ground_z + tall / 2.0),
+                  context, mass_mat, jitter(28.0))
+
+    total = len(site.objects) + len(context.objects)
+    print("[scene_setup] site context: %d objects (%d surrounds)"
+          % (total, len(context.objects)))
+    return site
+
+
+# ---------------------------------------------------------------------------
 # Camera
 # ---------------------------------------------------------------------------
 
@@ -502,6 +764,7 @@ def setup(shot="hero", engine=None):
     setup_world()
     setup_sun()
     setup_ground()
+    build_site_context()
     camera = setup_camera(shot)
     setup_render(engine)
     enable_shadow_catching()
