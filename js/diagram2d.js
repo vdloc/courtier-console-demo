@@ -1,4 +1,11 @@
-import { dimensionRecords, elevationShapes, LABEL_MIN_CONTAINER_WIDTH } from './dimensions.js';
+import {
+  dimensionRecords,
+  elevationShapes,
+  rebarProfile,
+  rebarRadius,
+  sceneBounds,
+  LABEL_MIN_CONTAINER_WIDTH
+} from './dimensions.js';
 
 const PX_PER_METER = 300;
 const MARGIN = 40;
@@ -27,12 +34,14 @@ export function mountDiagram2D(container) {
   });
   container.appendChild(svg);
 
-  // Model -> screen. Y is flipped (SVG grows downward) against the
-  // scene's total height so the object sits on a common baseline.
-  function toScreen(pt, height) {
+  // Model -> screen. Y is flipped (SVG grows downward) against the scene's
+  // TOP, not its height: the rebar hooks reach below y = 0, so measuring
+  // down from a fixed top is the only mapping that keeps negative-y
+  // geometry on the canvas instead of above it.
+  function toScreen(pt, top) {
     return {
       x: MARGIN + pt.x * PX_PER_METER,
-      y: MARGIN + (height - pt.y) * PX_PER_METER
+      y: MARGIN + (top - pt.y) * PX_PER_METER
     };
   }
 
@@ -53,7 +62,12 @@ export function mountDiagram2D(container) {
     while (svg.firstChild) svg.removeChild(svg.firstChild);
 
     const shapes = elevationShapes(params);
-    const sceneHeight = shapes.reduce((max, s) => Math.max(max, s.y + s.h), 0) + 0.1;
+    // sceneBounds() covers the rebar hooks, which reach BELOW y = 0. Sizing
+    // from elevationShapes() alone (the old `max(y + h)` starting at zero)
+    // silently clips them off the bottom of the drawing.
+    const bounds = sceneBounds(params);
+    const top = bounds.maxY + 0.05;
+    const sceneHeight = top - bounds.minY + 0.05;
     // Labels are fixed-size text and do not shrink with the panel, so in a
     // small container they would overlap into unreadable mush over the
     // object. Same threshold and same reasoning as the 3D renderer.
@@ -61,15 +75,15 @@ export function mountDiagram2D(container) {
 
     const projected = dimensionRecords.map((rec) => ({
       rec,
-      from: toScreen(rec.from(params), sceneHeight),
-      to: toScreen(rec.to(params), sceneHeight)
+      from: toScreen(rec.from(params), top),
+      to: toScreen(rec.to(params), top)
     }));
 
     // --- the object itself -------------------------------------------------
     // Drawn first so the annotation layer sits on top of it.
     const objectGroup = el('g', {});
     for (const s of shapes) {
-      const topLeft = toScreen({ x: s.x, y: s.y + s.h }, sceneHeight);
+      const topLeft = toScreen({ x: s.x, y: s.y + s.h }, top);
       const w = s.w * PX_PER_METER;
       const h = s.h * PX_PER_METER;
       if (w <= 0 || h <= 0) continue;
@@ -78,23 +92,35 @@ export function mountDiagram2D(container) {
         y: topLeft.y,
         width: w,
         height: h,
-        fill: s.kind === 'pipe' ? '#e9b483' : '#dbe2ec',
-        stroke: s.kind === 'pipe' ? '#c26a20' : '#8a97a8',
-        'stroke-width': 1.5,
-        rx: s.kind === 'pipe' ? Math.min(h / 2, 6) : 0
+        fill: '#dbe2ec',
+        stroke: '#8a97a8',
+        'stroke-width': 1.5
       }));
     }
-    // The H1/H2 split is a construction line inside the block, not an edge.
-    const split = toScreen({ x: 0, y: params.H1 }, sceneHeight);
-    objectGroup.appendChild(el('line', {
-      x1: split.x,
-      y1: split.y,
-      x2: split.x + params.A * PX_PER_METER,
-      y2: split.y,
-      stroke: '#8a97a8',
-      'stroke-width': 1,
-      'stroke-dasharray': '3,3'
-    }));
+
+    // Reinforcement. All Nb bars share one profile at different depths, and
+    // an elevation drops the depth axis -- so they project onto each other
+    // and the correct drawing is ONE path, not Nb overlapping copies.
+    // Stroked at the true bar diameter so the steel reads at its real size
+    // (visualScale deliberately does not touch bar geometry).
+    const profile = rebarProfile(params);
+    if (profile.length > 1) {
+      const d = profile
+        .map((pt, i) => {
+          const s = toScreen(pt, top);
+          return `${i === 0 ? 'M' : 'L'}${s.x.toFixed(2)} ${s.y.toFixed(2)}`;
+        })
+        .join(' ');
+      objectGroup.appendChild(el('path', {
+        d,
+        fill: 'none',
+        stroke: '#7a3b26',
+        'stroke-width': Math.max(rebarRadius(params) * 2 * PX_PER_METER, 1.5),
+        'stroke-linejoin': 'round',
+        'stroke-linecap': 'round',
+        opacity: 0.9
+      }));
+    }
     svg.appendChild(objectGroup);
 
     // --- dimension annotations --------------------------------------------
@@ -104,9 +130,13 @@ export function mountDiagram2D(container) {
     const annotations = el('g', {});
     const labelPositions = [];
     for (const { rec, from, to } of projected) {
-      const ox = rec.offsetDir.x * WITNESS_OFFSET;
+      // Records that share a crowded corner carry their own offsetScale so
+      // their labels fan out instead of overprinting (see dimensions.js).
+      // The 3D view applies the same factor, so both views fan out alike.
+      const witness = WITNESS_OFFSET * (rec.offsetScale ?? 1);
+      const ox = rec.offsetDir.x * witness;
       // offsetDir.y is +up in model space; SVG y grows downward.
-      const oy = -rec.offsetDir.y * WITNESS_OFFSET;
+      const oy = -rec.offsetDir.y * witness;
       const a = { x: from.x + ox, y: from.y + oy };
       const b = { x: to.x + ox, y: to.y + oy };
 
@@ -155,7 +185,7 @@ export function mountDiagram2D(container) {
     // Derived from what was actually drawn (object + annotations), so the
     // diagram never clips regardless of params.
     let minX = 0;
-    let maxX = (params.A + 0.1) * PX_PER_METER + MARGIN;
+    let maxX = (bounds.maxX + 0.1) * PX_PER_METER + MARGIN;
     for (const { x, anchor, rec } of labelPositions) {
       // Reserve room for the label text itself. Estimated from the string
       // rather than measured, since getBBox is unreliable before layout.
@@ -166,7 +196,7 @@ export function mountDiagram2D(container) {
       maxX = Math.max(maxX, anchor === 'end' ? x : x + textW);
     }
     for (const { from, to, rec } of projected) {
-      const ox = rec.offsetDir.x * WITNESS_OFFSET;
+      const ox = rec.offsetDir.x * WITNESS_OFFSET * (rec.offsetScale ?? 1);
       minX = Math.min(minX, from.x + ox, to.x + ox);
       maxX = Math.max(maxX, from.x + ox, to.x + ox);
     }

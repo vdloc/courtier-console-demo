@@ -5,8 +5,10 @@ import { getParams, setParam, subscribe } from '../js/state.js';
 test('getParams returns the documented defaults', () => {
   const p = getParams();
   assert.equal(p.A, 0.3);
-  assert.equal(p.H1, 0.4);
-  assert.equal(p.PhiM, 0.1);
+  assert.equal(p.H1, 0.35);
+  assert.equal(p.A2, 0.15);
+  assert.equal(p.Nb, 4);
+  assert.equal(p.Db, 0.04);
 });
 
 test('setParam mutates the value returned by getParams', () => {

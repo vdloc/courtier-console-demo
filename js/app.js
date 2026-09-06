@@ -3,7 +3,12 @@ import { getParams, setParam, subscribe } from './state.js';
 import { mountDiagram2D } from './diagram2d.js';
 import { mountDiagram3D } from './diagram3d.js';
 
-const PARAM_KEYS = ['A', 'B', 'H1', 'H2', 'Hv', 'Ec', 'Ep', 'Fee', 'PhiM', 'Uh', 'Ub', 'HsD'];
+const PARAM_KEYS = ['A', 'B', 'H1', 'A2', 'H2', 'Nb', 'Db', 'Sb', 'Cb', 'Lh', 'Lt'];
+
+// Nb is a bar COUNT, not a length. Everything else is metres. Keeping the
+// exception in one named set beats sprinkling `key === 'Nb'` through the
+// formatting and validation paths.
+const COUNT_KEYS = new Set(['Nb']);
 
 let viewMode = '2d'; // '2d' | '3d'
 
@@ -50,7 +55,10 @@ function renderResultRows(params) {
   for (const key of PARAM_KEYS) {
     const row = document.createElement('div');
     row.className = 'row';
-    row.innerHTML = `<span>${key}</span><span>${params[key].toFixed(3)} m</span>`;
+    const value = COUNT_KEYS.has(key)
+      ? String(Math.round(params[key]))
+      : `${params[key].toFixed(3)} m`;
+    row.innerHTML = `<span>${key}</span><span>${value}</span>`;
     container.appendChild(row);
   }
 }

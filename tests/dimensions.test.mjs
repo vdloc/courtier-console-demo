@@ -1,12 +1,48 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { dimensionRecords, visualScale } from '../js/dimensions.js';
+import {
+  dimensionRecords,
+  visualScale,
+  elevationShapes,
+  rebarProfile,
+  rebarDepths,
+  rebarRadius,
+  sceneBounds
+} from '../js/dimensions.js';
 
+// The corbel at its default configuration.
 const sampleParams = {
-  A: 0.3, B: 0.3, H1: 0.4, H2: 0.35, Hv: 0.4,
-  Ec: 0.15, Ep: 0.03, Fee: 0.1, PhiM: 0.1,
-  Uh: 0.04, Ub: 0.04, HsD: 0
+  A: 0.3, B: 0.3,
+  H1: 0.35, A2: 0.15, H2: 0.4,
+  Db: 0.04, Nb: 4, Sb: 0.07,
+  Cb: 0.02, Lh: 0.05, Lt: 0.04
 };
+
+// Derived values here are sums and differences of decimal fractions, which
+// are not exactly representable in binary floating point (0.35 - 0.02 is
+// 0.32999999999999996). Comparing to a tolerance is correct; asserting
+// exact equality would make these tests fail on arithmetic that is right.
+const EPS = 1e-9;
+function approx(actual, expected, msg) {
+  assert.ok(
+    Math.abs(actual - expected) < EPS,
+    `${msg}: expected ~${expected}, got ${actual}`
+  );
+}
+
+function getRecord(id) {
+  const rec = dimensionRecords.find((r) => r.id === id);
+  assert.ok(rec, `expected a dimension record with id "${id}"`);
+  return rec;
+}
+
+function assertPoint(actual, expected, msg) {
+  approx(actual.x, expected.x, `${msg}: x`);
+  approx(actual.y, expected.y, `${msg}: y`);
+  approx(actual.z, expected.z, `${msg}: z`);
+}
+
+// --- record contract ---------------------------------------------------
 
 test('every record has the required shape', () => {
   assert.ok(dimensionRecords.length > 0);
@@ -20,8 +56,9 @@ test('every record has the required shape', () => {
 });
 
 test('from/to return plain {x,y,z} points, not class instances', () => {
-  const rec = dimensionRecords.find((r) => r.id === 'H1');
-  const p = rec.from(sampleParams);
+  // This is what lets this module be imported into bare Node with no
+  // three.js dependency, which is why it is testable at all.
+  const p = getRecord('H1').from(sampleParams);
   assert.equal(typeof p.x, 'number');
   assert.equal(typeof p.y, 'number');
   assert.equal(typeof p.z, 'number');
@@ -29,137 +66,168 @@ test('from/to return plain {x,y,z} points, not class instances', () => {
 });
 
 test('label reflects the live param value', () => {
-  const rec = dimensionRecords.find((r) => r.id === 'H1');
-  assert.equal(rec.label(sampleParams), 'H1 = 0.40');
+  const rec = getRecord('H1');
+  assert.equal(rec.label(sampleParams), 'H1 = 0.35');
   assert.equal(rec.label({ ...sampleParams, H1: 0.55 }), 'H1 = 0.55');
 });
 
 test('visualScale clamps thin members but leaves the label value untouched', () => {
-  assert.equal(visualScale('Ep', 0.03), 0.06);
-  assert.equal(visualScale('Uh', 0.04), 0.06);
-  assert.equal(visualScale('PhiM', 0.1), 0.1); // already above floor
+  assert.equal(visualScale('Cb', 0.02), 0.06);
+  assert.equal(visualScale('Db', 0.04), 0.06);
+  assert.equal(visualScale('Lt', 0.04), 0.06);
+  assert.equal(visualScale('Cb', 0.09), 0.09); // already above the floor
   assert.equal(visualScale('A', 0.3), 0.3); // not a thin member, unchanged
+  // The label is built from the raw param, never from the clamped value.
+  assert.equal(getRecord('Db').label(sampleParams), 'Db = 0.040');
 });
 
-// --- Numeric geometry checks for every record, derived from the stated
-// coordinate convention: X = width (A axis), Y = height, Z = depth (B axis).
-// The block stacks H1, then H2, then Hv, then Ec, then Fee, each continuing
-// up +Y from the origin. Horizontal-offset records (Ep, PhiM, Uh, Ub) extend
-// in +X from the footprint edge at x = A, using the visualScale-clamped
-// length. offsetDir is checked for sign since a flipped side is exactly the
-// bug class this guards against.
+// --- the object --------------------------------------------------------
 
-function getRecord(id) {
-  const rec = dimensionRecords.find((r) => r.id === id);
-  assert.ok(rec, `expected a dimension record with id "${id}"`);
-  return rec;
-}
+test('elevationShapes: base block spans the full footprint', () => {
+  const base = elevationShapes(sampleParams).find((s) => s.id === 'base');
+  approx(base.x, 0, 'base x');
+  approx(base.y, 0, 'base y');
+  approx(base.w, 0.3, 'base w');
+  approx(base.h, 0.35, 'base h');
+  approx(base.depth, 0.3, 'base depth');
+});
 
-function assertPoint(actual, expected, msg) {
-  assert.equal(actual.x, expected.x, `${msg}: x`);
-  assert.equal(actual.y, expected.y, `${msg}: y`);
-  assert.equal(actual.z, expected.z, `${msg}: z`);
-}
+test('elevationShapes: raised block sits on the BACK of the base, on top of it', () => {
+  // A corbel, not a plinth: the raised mass is flush with the +X end and
+  // starts where the base stops. Getting this the wrong way round would
+  // silently mirror the object.
+  const raised = elevationShapes(sampleParams).find((s) => s.id === 'raised');
+  approx(raised.x, 0.15, 'raised x');
+  approx(raised.x + raised.w, sampleParams.A, 'raised right edge flush with A');
+  approx(raised.y, sampleParams.H1, 'raised sits on the base top');
+  approx(raised.h, 0.4, 'raised h');
+});
 
-test('A: full width along X at the base', () => {
+test('rebarProfile: five control points tracing anchor -> run -> leg -> hook', () => {
+  const pts = rebarProfile(sampleParams);
+  assert.equal(pts.length, 5);
+  assertPoint({ ...pts[0], z: 0 }, { x: 0.15, y: 0.39, z: 0 }, 'anchor into raised block');
+  assertPoint({ ...pts[1], z: 0 }, { x: 0.15, y: 0.33, z: 0 }, 'top of the run');
+  assertPoint({ ...pts[2], z: 0 }, { x: 0.02, y: 0.33, z: 0 }, 'front end of the run');
+  assertPoint({ ...pts[3], z: 0 }, { x: 0.02, y: -0.05, z: 0 }, 'bottom of the leg');
+  assertPoint({ ...pts[4], z: 0 }, { x: 0.06, y: -0.05, z: 0 }, 'hook tail');
+});
+
+test('rebarProfile: the top run sits one cover depth below the base surface', () => {
+  const pts = rebarProfile({ ...sampleParams, Cb: 0.05 });
+  approx(pts[1].y, 0.3, 'run height follows the cover');
+  approx(pts[2].x, 0.05, 'leg position follows the cover');
+});
+
+test('rebarProfile: the hook reaches BELOW zero', () => {
+  // The whole reason sceneBounds() exists. If this ever stops being true,
+  // the renderers can go back to assuming the drawing starts at y = 0.
+  const pts = rebarProfile(sampleParams);
+  assert.ok(pts[3].y < 0, 'leg bottom must be below the base underside');
+  assert.ok(pts[4].y < 0, 'hook tail must be below the base underside');
+});
+
+test('rebarDepths: Nb bars at Sb pitch, starting one cover plus one radius in', () => {
+  const d = rebarDepths(sampleParams);
+  assert.equal(d.length, 4);
+  approx(d[0], 0.04, 'first bar');
+  approx(d[1], 0.11, 'second bar');
+  approx(d[2], 0.18, 'third bar');
+  approx(d[3], 0.25, 'fourth bar');
+  // Every bar must still be inside the block's depth.
+  for (const z of d) assert.ok(z > 0 && z < sampleParams.B, `bar at ${z} inside B`);
+});
+
+test('rebarDepths: Nb is a count, so it is rounded and never negative', () => {
+  assert.equal(rebarDepths({ ...sampleParams, Nb: 0 }).length, 0);
+  assert.equal(rebarDepths({ ...sampleParams, Nb: 2.4 }).length, 2);
+  assert.equal(rebarDepths({ ...sampleParams, Nb: 2.6 }).length, 3);
+  assert.equal(rebarDepths({ ...sampleParams, Nb: -5 }).length, 0);
+});
+
+test('rebarRadius is half the diameter', () => {
+  approx(rebarRadius(sampleParams), 0.02, 'radius');
+});
+
+test('sceneBounds covers the hook below y=0, not just the concrete', () => {
+  // Sizing a viewport from elevationShapes() alone clips the hooks. This is
+  // the regression guard for exactly that.
+  const b = sceneBounds(sampleParams);
+  approx(b.minY, -0.07, 'minY includes the hook and the bar radius');
+  approx(b.maxY, 0.75, 'maxY is the top of the raised block');
+  approx(b.minX, 0, 'minX');
+  approx(b.maxX, 0.3, 'maxX');
+  assert.ok(b.minY < 0, 'bounds must extend below zero');
+});
+
+test('sceneBounds tracks the params rather than being fixed', () => {
+  const b = sceneBounds({ ...sampleParams, Lh: 0.2, H2: 1.0 });
+  approx(b.minY, -0.22, 'deeper hook lowers minY');
+  approx(b.maxY, 1.35, 'taller back wall raises maxY');
+});
+
+// --- annotation geometry -----------------------------------------------
+// offsetDir is checked for sign as well as position: a flipped side puts
+// the dimension line through the object, which is the bug class these
+// records exist to prevent.
+
+test('A: overall width along the base', () => {
   const rec = getRecord('A');
-  assertPoint(rec.from(sampleParams), { x: 0, y: 0, z: 0 }, 'A.from');
-  assertPoint(rec.to(sampleParams), { x: 0.3, y: 0, z: 0 }, 'A.to');
-  assert.equal(rec.offsetDir.x, 0);
-  assert.equal(rec.offsetDir.y, -1); // drawn below the block
-  assert.equal(rec.offsetDir.z, 0);
+  assertPoint(rec.from(sampleParams), { x: 0, y: 0, z: 0 }, 'A from');
+  assertPoint(rec.to(sampleParams), { x: 0.3, y: 0, z: 0 }, 'A to');
+  assert.equal(rec.offsetDir.y, -1, 'A sits below the object');
 });
 
-test('B: full depth along Z at the base', () => {
+test('B: runs along Z, degenerate in elevation', () => {
   const rec = getRecord('B');
-  assertPoint(rec.from(sampleParams), { x: 0, y: 0, z: 0 }, 'B.from');
-  assertPoint(rec.to(sampleParams), { x: 0, y: 0, z: 0.3 }, 'B.to');
-  assert.equal(rec.offsetDir.x, -1); // drawn to the left of the block
-  assert.equal(rec.offsetDir.y, 0);
-  assert.equal(rec.offsetDir.z, 0);
+  const from = rec.from(sampleParams);
+  const to = rec.to(sampleParams);
+  approx(to.z - from.z, 0.3, 'B length is along z');
+  approx(to.x - from.x, 0, 'B has no x extent');
+  approx(to.y - from.y, 0, 'B has no y extent');
 });
 
-test('H1: first height segment, from the base up', () => {
+test('H1: base height, from the ground up', () => {
   const rec = getRecord('H1');
-  assertPoint(rec.from(sampleParams), { x: 0, y: 0, z: 0 }, 'H1.from');
-  assertPoint(rec.to(sampleParams), { x: 0, y: 0.4, z: 0 }, 'H1.to');
-  // Tracks the live param rather than the default.
-  assertPoint(
-    getRecord('H1').to({ ...sampleParams, H1: 0.9 }),
-    { x: 0, y: 0.9, z: 0 },
-    'H1.to at H1=0.9'
-  );
-  assert.equal(rec.offsetDir.x, -1); // drawn to the left of the block
-  assert.equal(rec.offsetDir.y, 0);
-  assert.equal(rec.offsetDir.z, 0);
+  assertPoint(rec.from(sampleParams), { x: 0, y: 0, z: 0 }, 'H1 from');
+  assertPoint(rec.to(sampleParams), { x: 0, y: 0.35, z: 0 }, 'H1 to');
+  assert.equal(rec.offsetDir.x, -1, 'H1 sits to the left');
 });
 
-test('H2: stacks on top of H1', () => {
+test('H2: raised block height, stacked on H1 at the back face', () => {
   const rec = getRecord('H2');
-  assertPoint(rec.from(sampleParams), { x: 0, y: 0.4, z: 0 }, 'H2.from'); // H1
-  assertPoint(rec.to(sampleParams), { x: 0, y: 0.75, z: 0 }, 'H2.to'); // H1+H2
-  assert.equal(rec.offsetDir.x, -1);
-  assert.equal(rec.offsetDir.y, 0);
+  assertPoint(rec.from(sampleParams), { x: 0.3, y: 0.35, z: 0 }, 'H2 from');
+  assertPoint(rec.to(sampleParams), { x: 0.3, y: 0.75, z: 0 }, 'H2 to');
+  assert.equal(rec.offsetDir.x, 1, 'H2 sits to the right');
 });
 
-test('Hv: stacks on top of H1+H2', () => {
-  const rec = getRecord('Hv');
-  assertPoint(rec.from(sampleParams), { x: 0, y: 0.75, z: 0 }, 'Hv.from'); // H1+H2
-  assertPoint(rec.to(sampleParams), { x: 0, y: 1.15, z: 0 }, 'Hv.to'); // H1+H2+Hv
-  assert.equal(rec.offsetDir.x, 1); // drawn on the opposite side from the others
-  assert.equal(rec.offsetDir.y, 0);
+test('A2: raised block width, measured back from the +X end', () => {
+  const rec = getRecord('A2');
+  assertPoint(rec.from(sampleParams), { x: 0.15, y: 0.75, z: 0 }, 'A2 from');
+  assertPoint(rec.to(sampleParams), { x: 0.3, y: 0.75, z: 0 }, 'A2 to');
 });
 
-test('Ec: stacks on top of H1+H2+Hv', () => {
-  const rec = getRecord('Ec');
-  const { H1, H2, Hv, Ec } = sampleParams;
-  assertPoint(rec.from(sampleParams), { x: 0, y: H1 + H2 + Hv, z: 0 }, 'Ec.from');
-  assertPoint(rec.to(sampleParams), { x: 0, y: H1 + H2 + Hv + Ec, z: 0 }, 'Ec.to');
-  assert.equal(rec.offsetDir.x, -1);
-  assert.equal(rec.offsetDir.y, 0);
+test('Lh: hook depth measured downward from the base underside', () => {
+  const rec = getRecord('Lh');
+  const from = rec.from(sampleParams);
+  const to = rec.to(sampleParams);
+  approx(from.y, 0, 'Lh starts at the underside');
+  approx(to.y, -0.05, 'Lh ends below zero');
+  assert.ok(to.y < from.y, 'Lh must measure downward');
 });
 
-test('Fee: stacks on top of H1+H2+Hv+Ec', () => {
-  const rec = getRecord('Fee');
-  const { H1, H2, Hv, Ec, Fee } = sampleParams;
-  assertPoint(rec.from(sampleParams), { x: 0, y: H1 + H2 + Hv + Ec, z: 0 }, 'Fee.from');
-  assertPoint(rec.to(sampleParams), { x: 0, y: H1 + H2 + Hv + Ec + Fee, z: 0 }, 'Fee.to');
-  assert.equal(rec.offsetDir.x, -1);
-  assert.equal(rec.offsetDir.y, 0);
+test('thin records use the clamped length for geometry', () => {
+  // Cb is 0.02 but the floor is 0.06: the drawn extent is the clamped one
+  // so the annotation stays visible, while the label still says 0.020.
+  const rec = getRecord('Cb');
+  const len = rec.to(sampleParams).x - rec.from(sampleParams).x;
+  approx(len, 0.06, 'Cb drawn at the visual floor');
+  assert.equal(rec.label(sampleParams), 'Cb = 0.020');
 });
 
-test('Ep: horizontal offset at height H1, clamped by visualScale', () => {
-  const rec = getRecord('Ep');
-  assertPoint(rec.from(sampleParams), { x: 0.3, y: 0.4, z: 0 }, 'Ep.from'); // A, H1
-  // Ep=0.03 is below the 0.06 visual floor, so the drawn length is clamped.
-  assertPoint(rec.to(sampleParams), { x: 0.36, y: 0.4, z: 0 }, 'Ep.to');
-  assert.equal(rec.offsetDir.x, 0);
-  assert.equal(rec.offsetDir.y, 1);
-});
-
-test('PhiM: horizontal offset at height H1+H2, above visual floor unchanged', () => {
-  const rec = getRecord('PhiM');
-  assertPoint(rec.from(sampleParams), { x: 0.3, y: 0.75, z: 0 }, 'PhiM.from'); // A, H1+H2
-  // PhiM=0.1 is already above the 0.06 floor, so the drawn length is unclamped.
-  assertPoint(rec.to(sampleParams), { x: 0.4, y: 0.75, z: 0 }, 'PhiM.to');
-  assert.equal(rec.offsetDir.x, 0);
-  assert.equal(rec.offsetDir.y, 1);
-});
-
-test('Uh: horizontal offset at height H1+H2+Hv, clamped by visualScale', () => {
-  const rec = getRecord('Uh');
-  assertPoint(rec.from(sampleParams), { x: 0.3, y: 1.15, z: 0 }, 'Uh.from'); // A, H1+H2+Hv
-  // Uh=0.04 is below the 0.06 visual floor, so the drawn length is clamped.
-  assertPoint(rec.to(sampleParams), { x: 0.36, y: 1.15, z: 0 }, 'Uh.to');
-  assert.equal(rec.offsetDir.x, 0);
-  assert.equal(rec.offsetDir.y, 1);
-});
-
-test('Ub: horizontal offset at the base, clamped by visualScale', () => {
-  const rec = getRecord('Ub');
-  assertPoint(rec.from(sampleParams), { x: 0.3, y: 0, z: 0 }, 'Ub.from'); // A, base
-  // Ub=0.04 is below the 0.06 visual floor, so the drawn length is clamped.
-  assertPoint(rec.to(sampleParams), { x: 0.36, y: 0, z: 0 }, 'Ub.to');
-  assert.equal(rec.offsetDir.x, 0);
-  assert.equal(rec.offsetDir.y, -1); // drawn below the block, like A and Ub's base
+test('records track params rather than baking the defaults', () => {
+  const wide = { ...sampleParams, A: 0.9, H1: 0.8 };
+  approx(getRecord('A').to(wide).x, 0.9, 'A follows the param');
+  approx(getRecord('H1').to(wide).y, 0.8, 'H1 follows the param');
+  approx(getRecord('H2').from(wide).y, 0.8, 'H2 starts at the new H1');
 });

@@ -2,10 +2,17 @@
 
 A portfolio/skill-showcase demo: an admin-console-style configuration form
 whose numeric inputs drive a live parametric diagram, rendered in both 2D
-(SVG) and 3D (Three.js), with a modal to enlarge the diagram. It replicates
-the interaction pattern of a "console courtier" screenshot — a French-labelled
-form (`Cadre`, `Poteau`, `Plaque d'appui`, ...) for describing the dimensions
-of a support structure and pipe run.
+(SVG) and 3D (Three.js), with a modal to enlarge the diagram. It follows the
+interaction pattern of a "console courtier" screenshot — a console-style
+form for describing the dimensions of a structural element.
+
+The object being configured is a **reinforced-concrete corbel**: a base
+block, a raised back wall standing on it, and a set of bent reinforcing bars
+whose top run sits under the base's top surface, turns down the front face,
+and ends in a hook below the underside. The 3D view is a rebuild of a
+Blender/Cycles model of that corbel — its lighting rig, camera and materials
+were transcribed out of the Blender scene rather than eyeballed — and the 2D
+view draws the same object from the same shared tables.
 
 It demonstrates:
 
@@ -21,6 +28,10 @@ It demonstrates:
 This is a static, no-build, no-backend site: plain HTML/CSS/JS (ES modules),
 Three.js r169 loaded via a pinned `importmap`. No npm, no bundler, no
 `package.json`.
+
+The 3D view runs on **`WebGPURenderer`**, which falls back to a WebGL2
+backend on its own when no GPU adapter is available — see the `js/diagram3d.js`
+notes below for the two traps that came with the switch.
 
 ## Run it
 
@@ -69,29 +80,78 @@ in-browser — see `docs/superpowers/specs/2026-09-05-courtier-console-design.md
   - `dimensionRecords` — one record per annotated dimension, as a pair of
     3D anchor functions (`from(params)`, `to(params)`), an offset direction
     for the witness line, and a label function.
-  - `elevationShapes(params)` — the object being measured, as plain
-    rectangles. `js/diagram2d.js` draws them as SVG rects;
-    `js/diagram3d.js` extrudes each one along Z into a mesh.
+  - `elevationShapes(params)` — the concrete masses, as plain rectangles.
+    `js/diagram2d.js` draws them as SVG rects; `js/diagram3d.js` extrudes
+    each one along Z into a mesh.
+  - `rebarProfile(params)` — the bar centreline as a five-point polyline in
+    the X/Y plane, plus `rebarDepths(params)` (one Z per bar) and
+    `rebarRadius(params)`. The 2D view strokes the profile once — all bars
+    project onto each other in elevation, so the correct drawing is one
+    path, not `Nb` overlapping copies — while the 3D view sweeps a
+    `TubeGeometry` along it at every depth.
+  - `sceneBounds(params)` — the full drawn extent. **The bar hooks reach
+    below `y = 0`**, so a viewport sized from `elevationShapes()` alone
+    (`max(y + h)` starting at zero) clips them off the bottom. This is the
+    supported way to ask how tall the drawing actually is.
 
-  Both renderers read both tables, so the two views draw the same object
+  Both renderers read all of these, so the two views draw the same object
   with the same numbers. This is the part of the design worth stealing: the
   temptation is to let each renderer own its own geometry, and that is
   exactly how two views drift apart.
 
   The file also exports `visualScale(key, value)`, which clamps thin
-  members (insulation/pipe thickness, offsets) to a visible floor for
-  rendering only — the label text always shows the true value — and
-  `LABEL_MIN_CONTAINER_WIDTH`, the panel width below which both renderers
+  annotation members (`Db`, `Cb`, `Lt`) to a visible floor so their
+  dimension lines stay legible — the label text always shows the true value.
+  Note it is applied to *annotation* geometry only: clamping the bars
+  themselves would draw a corbel with the wrong steel in it. Finally,
+  `LABEL_MIN_CONTAINER_WIDTH` is the panel width below which both renderers
   drop their labels (they are fixed-size text and would otherwise overlap
-  into mush in the small thumbnail; "Agrandir" is how you read values).
+  into mush in the small thumbnail; "Enlarge diagram" is how you read
+  values).
 
-- **`js/diagram3d.js`** — the Three.js scene (box + pipe + dimension lines
-  and labels), rebuilt wholesale from `dimensionRecords` on every param
-  change (cheap at this scale, no incremental diffing). It disposes the
-  previous frame's geometries/materials and detaches stale CSS2D label DOM
-  nodes before each rebuild, and fits the camera to a bounding box of the
-  current geometry (preserving the user's current orbit direction) rather
-  than resetting to a fixed camera position.
+- **`js/diagram3d.js`** — the Three.js scene (concrete masses, swept rebar,
+  dimension lines and CSS2D labels), rebuilt wholesale from the shared
+  tables on every param change (cheap at this scale, no incremental
+  diffing). It fits the camera to a bounding **sphere** of the current
+  geometry — orientation-independent, so the fit stays correct wherever the
+  user has orbited — preserving the current orbit direction rather than
+  snapping back to a default.
+
+  Two details are load-bearing and easy to undo by accident:
+
+  - **Materials are built once at mount, never inside the rebuild**, because
+    each owns a procedurally generated canvas texture and regenerating
+    those per keystroke turns a param edit into a visible stall. The
+    corollary is that the disposal pass disposes **geometries only** —
+    disposing a shared material on the first rebuild leaves every later
+    frame drawing against a dead material.
+  - **`shadowMap.type` is `PCFShadowMap`, not `PCFSoftShadowMap`.**
+    `light.shadow.radius` is only honoured by `PCFShadowMap`; under
+    `PCFSoftShadowMap` it is ignored outright and the shadow renders
+    hard-edged, reading as a second grey object rather than a shadow. This
+    survived the move to `WebGPURenderer`: there `shadowMap.type` indexes a
+    filter library and only the PCF entry reads `shadow.radius`, as a
+    17-tap kernel scale.
+  - **The importmap points at `build/three.webgpu.js`, NOT
+    `three.webgpu.min.js`.** This is not a preference. `NodeLibrary`
+    registers materials by `materialClass.name` but looks them up by
+    `material.type`; minification mangles the class name, so in the
+    minified build every plain material (`MeshStandardMaterial`, and the
+    ones inside `RoomEnvironment`) misses the map and logs
+    `NodeMaterial: Material "..." is not compatible.` The unminified build
+    is ~1.7MB against ~840KB — that size is the cost of the bug.
+  - **The backend initialises asynchronously.** `renderer.init()` requests a
+    GPU adapter and may swap in the WebGL2 backend partway through, so
+    `PMREMGenerator` cannot run until it resolves and the animation loop is
+    gated on a `ready` flag. Calling `render()` before init does not crash —
+    it warns and defers to `renderAsync()` — so an ungated loop warns on
+    every frame instead of failing loudly.
+
+  Lighting, camera and exposure are transcribed from the Blender scene
+  (Blender is Z-up, three.js is Y-up, so the axis swap was done once, at
+  transcription time). Blender watt values do not map to three.js
+  intensities — the *ratios* between key, fill and rim were preserved and
+  then scaled to a sane exposure.
 
 - **`js/diagram2d.js`** — an SVG view of the same dimension records,
   projected onto a 2D plane. The `viewBox` is derived from the actual

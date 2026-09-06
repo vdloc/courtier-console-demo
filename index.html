@@ -9,7 +9,7 @@
   <script type="importmap">
   {
     "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.min.js",
+      "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.webgpu.js",
       "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
     }
   }
@@ -29,41 +29,40 @@
       <h1>Parameters</h1>
 
       <section class="form-section">
-        <h2>Frame</h2>
+        <h2>Base block</h2>
         <div class="field-grid">
-          <label>A (m) <input type="number" id="input-A" min="0" max="2" step="0.01"></label>
-          <label>B (m) <input type="number" id="input-B" min="0" max="2" step="0.01"></label>
-          <label>H1 (m) <input type="number" id="input-H1" min="0" max="2" step="0.01"></label>
-          <label>H2 (m) <input type="number" id="input-H2" min="0" max="2" step="0.01"></label>
+          <label>A &mdash; width (m) <input type="number" id="input-A" min="0.1" max="2" step="0.01"></label>
+          <label>B &mdash; depth (m) <input type="number" id="input-B" min="0.1" max="2" step="0.01"></label>
+          <label class="field-span-2">H1 &mdash; height (m) <input type="number" id="input-H1" min="0.05" max="2" step="0.01"></label>
         </div>
       </section>
 
       <section class="form-section">
-        <h2>Post</h2>
+        <h2>Raised back wall</h2>
         <div class="field-grid">
-          <label>Hv (m) <input type="number" id="input-Hv" min="0" max="2" step="0.01"></label>
-          <label>Ec (m) <input type="number" id="input-Ec" min="0" max="1" step="0.01"></label>
-          <label class="field-span-2">Fee (m) <input type="number" id="input-Fee" min="0" max="1" step="0.01"></label>
+          <label>A2 &mdash; width (m) <input type="number" id="input-A2" min="0.02" max="2" step="0.01"></label>
+          <label>H2 &mdash; height (m) <input type="number" id="input-H2" min="0.05" max="2" step="0.01"></label>
         </div>
       </section>
 
       <section class="form-section">
-        <h2>Bearing plate</h2>
+        <h2>Reinforcement</h2>
         <div class="field-grid">
-          <label>Ep (m) <input type="number" id="input-Ep" min="0" max="0.5" step="0.005"></label>
-          <label>&Phi;m (m) <input type="number" id="input-PhiM" min="0" max="0.5" step="0.005"></label>
-          <label>Uh (m) <input type="number" id="input-Uh" min="0" max="0.5" step="0.005"></label>
-          <label>Ub (m) <input type="number" id="input-Ub" min="0" max="0.5" step="0.005"></label>
-          <label class="field-span-2">HsD (m) <input type="number" id="input-HsD" min="0" max="1" step="0.01"></label>
+          <label>Nb &mdash; bar count <input type="number" id="input-Nb" min="0" max="12" step="1"></label>
+          <label>Db &mdash; bar dia. (m) <input type="number" id="input-Db" min="0.006" max="0.06" step="0.002"></label>
+          <label>Sb &mdash; pitch (m) <input type="number" id="input-Sb" min="0.02" max="0.4" step="0.005"></label>
+          <label>Cb &mdash; cover (m) <input type="number" id="input-Cb" min="0.005" max="0.2" step="0.005"></label>
+          <label>Lh &mdash; hook depth (m) <input type="number" id="input-Lh" min="0" max="0.5" step="0.005"></label>
+          <label>Lt &mdash; hook tail (m) <input type="number" id="input-Lt" min="0" max="0.5" step="0.005"></label>
         </div>
       </section>
     </main>
 
     <aside class="right-rail">
       <div class="validation-chips">
-        <span class="chip chip-ok">Frame &#10003;</span>
-        <span class="chip chip-ok">Post &#10003;</span>
-        <span class="chip chip-ok">Bearing plate &#10003;</span>
+        <span class="chip chip-ok">Base block &#10003;</span>
+        <span class="chip chip-ok">Back wall &#10003;</span>
+        <span class="chip chip-ok">Reinforcement &#10003;</span>
       </div>
 
       <div class="diagram-panel">
