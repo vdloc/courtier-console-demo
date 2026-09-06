@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Build output of the React viewer (regenerate with `npm run build`)
+app/dist/
+
+# Tool scratch
+.playwright-mcp/
+
+# Verification screenshots and captured warnings, not part of the deliverable
+viewer-*.png
+warn.txt
+
+# Python bytecode from the Blender scripts
+__pycache__/
+*.pyc

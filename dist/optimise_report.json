@@ -1,0 +1,17 @@
+{
+  "file": "structure_demo.glb",
+  "sizeMB": 2.76,
+  "before": {
+    "objects": 3137,
+    "unique_meshes": 2773,
+    "triangles": 242892,
+    "materials": 7
+  },
+  "after": {
+    "objects": 3137,
+    "unique_meshes": 36,
+    "triangles": 386748,
+    "materials": 7
+  },
+  "draco": true
+}

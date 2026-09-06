@@ -1,0 +1,44 @@
+{
+  "fps": 30,
+  "duration": 18.0,
+  "frameStart": 1,
+  "frameEnd": 541,
+  "clipName": "ConstructionSequence",
+  "phases": [
+    {
+      "name": "foundations",
+      "start": 0.0,
+      "end": 3.0,
+      "startFrame": 1,
+      "endFrame": 91
+    },
+    {
+      "name": "columns",
+      "start": 3.0,
+      "end": 6.0,
+      "startFrame": 91,
+      "endFrame": 181
+    },
+    {
+      "name": "beams",
+      "start": 6.0,
+      "end": 10.0,
+      "startFrame": 181,
+      "endFrame": 301
+    },
+    {
+      "name": "services",
+      "start": 10.0,
+      "end": 14.0,
+      "startFrame": 301,
+      "endFrame": 421
+    },
+    {
+      "name": "handover",
+      "start": 14.0,
+      "end": 18.0,
+      "startFrame": 421,
+      "endFrame": 541
+    }
+  ]
+}
