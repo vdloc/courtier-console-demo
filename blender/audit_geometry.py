@@ -521,8 +521,293 @@ def report():
             print("          %6.1f mm  %9.6f m3  %s | %s"
                   % (d * 1000, vol, nm_a, nm_b))
 
+    collisions(objs, boxes, clashes)
     findings(objs, boxes, clashes)
     print("\n" + "=" * 68)
+
+
+def collisions(objs, boxes, clashes):
+    """The named relationships, classified the way the review asks.
+
+    CRITICAL is reserved for geometry that could not be built: a member
+    meeting nothing, or driven through another. Magnitude ranks within a
+    tier, it does not set the tier - a 5 mm lap is minor however precisely
+    it is measured.
+    """
+    print("\n" + "=" * 68)
+    print("COLLISION DETECTION")
+    print("=" * 68)
+    out = defaultdict(list)
+
+    def add(sev, kind, a, b, detail):
+        out[sev].append((kind, a, b, detail))
+
+    print("\nCOLUMNS vs BEAMS")
+    fit = beam_column_fit(objs, boxes)
+    gaps = [r for r in fit if r[3] is not None and r[3] > 0.001]
+    deep = [r for r in fit if r[3] is not None and r[3] < -0.001]
+    none = [r for r in fit if r[3] is None]
+    print("    %d beam ends tested, %d seated, %d gapped, %d over-inserted, "
+          "%d unsupported" % (len(fit), len(fit) - len(gaps) - len(deep)
+                              - len(none), len(gaps), len(deep), len(none)))
+    for name, col, node, _ in none:
+        add("CRITICAL", "beam misses column connection", name, "",
+            "no column found at node %s carrying this end" % node)
+    for name, col, node, g in sorted(gaps, key=lambda r: -r[3])[:6]:
+        add("CRITICAL" if g > 0.010 else "MINOR",
+            "beam misses column connection", name, col,
+            "end stops %.1f mm short of the column face" % (g * 1000))
+    for name, col, node, g in sorted(deep, key=lambda r: r[3])[:6]:
+        add("CRITICAL" if -g > 0.010 else "MINOR",
+            "beam enters column too deeply", name, col,
+            "end is driven %.1f mm past the column face" % (-g * 1000))
+
+    off = beam_datum(objs, boxes)
+    print("    %d beams off the floor datum" % len(off))
+    for name, d in sorted(off, key=lambda r: -abs(r[1]))[:6]:
+        add("MEDIUM", "wrong height", name, "",
+            "top flange sits %.1f mm %s the floor line"
+            % (abs(d) * 1000, "above" if d > 0 else "below"))
+
+    print("\nBEAMS vs BEAMS")
+    bb = [r for k, rows in clashes.items() if set(k) == {"BEAM"} for r in rows]
+    real = [r for r in bb if r[2] > CONTACT]
+    print("    %d beam-to-beam overlaps, %d real" % (len(bb), len(real)))
+    for nm_a, nm_b, d, vol in sorted(real, key=lambda r: -r[2])[:6]:
+        add("CRITICAL", "accidental overlap", nm_a, nm_b,
+            "beams share %.1f mm (%.6f m3)" % (d * 1000, vol))
+    dups = [g for g in check_duplicates(objs, boxes)
+            if any(family(n) == "BEAM" for n in g)]
+    print("    %d duplicate members" % len(dups))
+    for g in dups[:6]:
+        add("MEDIUM", "duplicate member", g[0], ", ".join(g[1:]),
+            "%d beams fill the same volume" % len(g))
+    spacing = beam_spacing(objs, boxes)
+    print("    %d beams off the bay spacing" % len(spacing))
+    for name, length, bay in spacing[:6]:
+        add("MEDIUM", "incorrect spacing", name, "",
+            "spans %.3f m inside a %.3f m bay" % (length, bay))
+
+    print("\nPIPES")
+    pipe_pairs = [(k, r) for k, rows in clashes.items() if "PIPE" in k
+                  for r in rows if r[2] > CONTACT]
+    print("    %d pipe-vs-anything penetrations" % len(pipe_pairs))
+    for k, (nm_a, nm_b, d, vol) in pipe_pairs[:6]:
+        add("CRITICAL", "pipe through structure", nm_a, nm_b,
+            "%s share %.1f mm" % (" x ".join(k), d * 1000))
+    route = pipe_routing(objs, boxes)
+    print("    %d routing problems" % len(route))
+    for name, why in route[:6]:
+        add("MEDIUM", "impossible routing", name, "", why)
+
+    print("\nCONNECTIONS")
+    orphans = orphan_parts(objs, boxes)
+    print("    %d floating plates or disconnected bolts" % len(orphans))
+    for name, why in orphans[:6]:
+        add("CRITICAL", "disconnected part", name, "", why)
+    joints = [g for g in check_duplicates(objs, boxes)
+              if any(family(n) in ("ENDPLATE", "SPLICE", "BASEPLATE")
+                     for n in g)]
+    print("    %d duplicated joints" % len(joints))
+    for g in joints[:6]:
+        add("MEDIUM", "duplicated joint", g[0], ", ".join(g[1:]),
+            "%d plates in the same place" % len(g))
+
+    print("\n" + "-" * 68)
+    for sev in ("CRITICAL", "MEDIUM", "MINOR"):
+        rows = out[sev]
+        print("\n%s - %d" % (sev, len(rows)))
+        for kind, a, b, detail in rows:
+            print("    %s" % kind)
+            print("      A: %s" % a)
+            print("      B: %s" % (b or "-"))
+            print("      %s" % detail)
+        if not rows:
+            print("    none")
+
+
+# ---------------------------------------------------------------------------
+# Collision detection between named structural relationships
+#
+# The clash pass asks "does anything overlap that should not". These ask a
+# harder question: does each member meet the one it is supposed to meet.
+# A beam that stops 40 mm short of its column overlaps nothing at all, so
+# no amount of intersection testing will ever mention it.
+# ---------------------------------------------------------------------------
+
+AXIS = {"beam_x": 0, "beam_y": 1}
+
+
+def grid_lines(objs, boxes):
+    """Column centre lines, clustered out of the columns themselves.
+
+    level_z() and grid_x() live in the generator's namespace, which a
+    second -P script cannot reach, so the grid is recovered from the
+    steel rather than assumed.
+    """
+    def cluster(values):
+        out = []
+        for v in sorted(values):
+            if not out or v - out[-1] > 0.010:
+                out.append(v)
+        return out
+
+    cols = [o for o in objs if family(o.name) == "COLUMN"]
+    xs, ys = [], []
+    for o in cols:
+        lo, hi = boxes[o.name]
+        xs.append((lo[0] + hi[0]) * 0.5)
+        ys.append((lo[1] + hi[1]) * 0.5)
+    return cluster(xs), cluster(ys)
+
+
+def beam_column_fit(objs, boxes):
+    """Signed distance from each beam end to the column it frames into.
+
+    Positive is a gap - the beam never reaches its connection. Negative is
+    penetration - the beam is driven into the column. Zero is the trim
+    working. Each beam is matched to its column through the grid
+    reference it already carries, not by searching space.
+    """
+    cols = defaultdict(list)
+    for o in objs:
+        if family(o.name) == "COLUMN":
+            cols[o.get("grid_ref")].append(o)
+
+    rows = []
+    for o in objs:
+        axis = AXIS.get(o.get("element_type") or "")
+        if axis is None:
+            continue
+        ref = o.get("grid_ref") or ""
+        if "-" not in ref:
+            continue
+        lo, hi = boxes[o.name]
+        for end, node in zip((0, 1), ref.split("-", 1)):
+            # The column carrying this end is the one at that node whose
+            # own span brackets the beam's top - the storey below it.
+            support = None
+            for c in cols.get(node, ()):
+                clo, chi = boxes[c.name]
+                if clo[2] < hi[2] - 0.001 <= chi[2] + 0.001:
+                    support = c
+                    break
+            if support is None:
+                rows.append((o.name, "", "no column at node %s" % node, None))
+                continue
+            clo, chi = boxes[support.name]
+            # Gap measured along the beam's own axis, toward its column.
+            gap = (lo[axis] - chi[axis]) if end == 0 else (clo[axis] - hi[axis])
+            rows.append((o.name, support.name, node, gap))
+    return rows
+
+
+def beam_datum(objs, boxes):
+    """A drop beam's top flange sits flush with the floor line, which is
+    the top of the column beneath it."""
+    cols = defaultdict(list)
+    for o in objs:
+        if family(o.name) == "COLUMN":
+            cols[o.get("grid_ref")].append(o)
+
+    rows = []
+    for o in objs:
+        if AXIS.get(o.get("element_type") or "") is None:
+            continue
+        ref = (o.get("grid_ref") or "").split("-")[0]
+        lo, hi = boxes[o.name]
+        tops = [boxes[c.name][1][2] for c in cols.get(ref, ())
+                if boxes[c.name][1][2] <= hi[2] + 0.001]
+        if not tops:
+            continue
+        off = hi[2] - max(tops)
+        if abs(off) > 0.002:
+            rows.append((o.name, off))
+    return rows
+
+
+def beam_spacing(objs, boxes):
+    """Each beam spans one bay, less the half column it stops against at
+    either end. A span that is not a bay means the grid drifted."""
+    xs, ys = grid_lines(objs, boxes)
+    rows = []
+    for o in objs:
+        axis = AXIS.get(o.get("element_type") or "")
+        if axis is None:
+            continue
+        lines = xs if axis == 0 else ys
+        lo, hi = boxes[o.name]
+        length = hi[axis] - lo[axis]
+        # Nearest pair of grid lines bracketing this beam.
+        bays = [b - a for a, b in zip(lines, lines[1:])]
+        if not bays:
+            continue
+        best = min(bays, key=lambda b: abs(b - length))
+        # The beam is the bay less one column width; allow any column size.
+        if not (0.20 <= best - length <= 0.60):
+            rows.append((o.name, length, best))
+    return rows
+
+
+def pipe_routing(objs, boxes):
+    """Clash testing cannot see a badly routed pipe that happens to miss
+    everything. Check the run hangs under the steel, stays inside the
+    building, and does not sit on a column line where it would have to
+    pass through one."""
+    xs, ys = grid_lines(objs, boxes)
+    beams = [o for o in objs if family(o.name) == "BEAM"]
+    rows = []
+    for o in objs:
+        if family(o.name) != "PIPE":
+            continue
+        lo, hi = boxes[o.name]
+        # Soffit of the beams the run passes beneath.
+        above = [boxes[b.name][0][2] for b in beams
+                 if boxes[b.name][0][2] > hi[2] - 0.001]
+        if above and min(above) - hi[2] > 1.0:
+            rows.append((o.name, "hangs %.2f m below the nearest soffit"
+                         % (min(above) - hi[2])))
+        if not above:
+            rows.append((o.name, "no beam above the run at any point"))
+        if lo[0] < xs[0] - 0.5 or hi[0] > xs[-1] + 0.5 \
+                or lo[1] < ys[0] - 0.5 or hi[1] > ys[-1] + 0.5:
+            rows.append((o.name, "run leaves the building footprint"))
+        for gx in xs:
+            if lo[0] < gx < hi[0] and (hi[0] - lo[0]) < 1.0:
+                rows.append((o.name, "run sits on column grid line x=%.1f"
+                             % gx))
+    return rows
+
+
+def orphan_parts(objs, boxes):
+    """Plates bolted to nothing, and bolts through nothing.
+
+    check_support() only ever looked at load-bearing members, so the
+    fabrication hardware was never tested for being attached at all.
+    """
+    def touching(a_lo, a_hi, b_lo, b_hi, tol=0.005):
+        return all(a_lo[i] - tol <= b_hi[i] and b_lo[i] - tol <= a_hi[i]
+                   for i in range(3))
+
+    hosts = [o for o in objs
+             if family(o.name) in ("BEAM", "COLUMN", "PAD", "BRACE")]
+    plates = [o for o in objs
+              if family(o.name) in ("ENDPLATE", "SPLICE", "BASEPLATE",
+                                    "STIFFENER", "GUSSET")]
+    rows = []
+    for p in plates:
+        plo, phi = boxes[p.name]
+        if not any(touching(plo, phi, *boxes[h.name]) for h in hosts):
+            rows.append((p.name, "plate is attached to no member"))
+
+    anchors = plates + hosts
+    for b in objs:
+        if family(b.name) != "BOLT":
+            continue
+        blo, bhi = boxes[b.name]
+        if not any(touching(blo, bhi, *boxes[a.name]) for a in anchors):
+            rows.append((b.name, "bolt passes through nothing"))
+    return rows
 
 
 # ---------------------------------------------------------------------------
