@@ -42,10 +42,25 @@ def family(name):
         ("Concrete_Pad", "PAD"),
         ("Rail_", "RAIL"),
         ("Ground_Plane", "GROUND"),
+        # Site dressing from scene_setup.py. Not structural, but "every
+        # object" means every object, and the hoarding and compound are
+        # close enough to the frame to be worth testing against it.
+        ("Site_Hoarding_", "HOARDING"),
+        ("Site_Cabin_", "CABIN"),
+        ("Site_Skip", "SKIP"),
+        ("Site_Bundle_", "BUNDLE"),
+        ("Site_Bearer_", "BEARER"),
+        ("Site_Barrier_", "BARRIER"),
+        ("Site_Spoil_", "SPOIL"),
+        ("Site_Surround_", "SURROUND"),
     ):
         if name.startswith(prefix):
             return fam
     return "OTHER"
+
+
+SITE = ("HOARDING", "CABIN", "SKIP", "BUNDLE", "BEARER", "BARRIER",
+        "SPOIL", "SURROUND", "GROUND")
 
 
 # Pairs whose members are fabricated to occupy the same volume.
@@ -79,10 +94,19 @@ PERMITTED = {
 }
 
 
+# Site props stand on the ground next to each other; stacked steel touches
+# its bearers, and spoil heaps touch the ground. None of that is a defect.
+PERMITTED |= {frozenset(p) for p in (
+    ("BUNDLE", "BEARER"), ("BEARER", "GROUND"), ("BUNDLE", "GROUND"),
+    ("SPOIL", "GROUND"), ("CABIN", "GROUND"), ("SKIP", "GROUND"),
+    ("HOARDING", "GROUND"), ("BARRIER", "GROUND"), ("SURROUND", "GROUND"),
+    ("PAD", "GROUND"), ("CABIN", "CABIN"), ("BARRIER", "BARRIER"),
+)}
+
+
 def targets():
-    """Mesh objects that carry structural meaning."""
-    return [o for o in bpy.data.objects
-            if o.type == 'MESH' and family(o.name) != "OTHER"]
+    """Every mesh in the file. Empties and the camera carry no geometry."""
+    return [o for o in bpy.data.objects if o.type == 'MESH']
 
 
 # ---------------------------------------------------------------------------
@@ -103,8 +127,13 @@ def check_rotation(objs):
     brace diagonals which are aimed down their own axis."""
     bad = []
     for o in objs:
-        if family(o.name) == "BRACE":
-            continue                      # genuinely off-axis by design
+        fam = family(o.name)
+        if fam == "BRACE" or fam in SITE:
+            # Braces run down a diagonal, and the site props are jittered on
+            # purpose - a stack of steel dropped off a lorry does not land
+            # square. Holding either to the structural grid reports the
+            # realism as the defect.
+            continue
         for axis, ang in zip("XYZ", o.rotation_euler):
             deg = math.degrees(ang)
             if abs(deg - round(deg / 90.0) * 90.0) > 0.01:
@@ -188,6 +217,125 @@ def bvh(o):
     return BVHTree.FromPolygons(verts, polys, all_triangles=False, epsilon=0.0)
 
 
+def cross_section(o, boxes):
+    """The two smaller bounding-box dimensions - a prismatic member's
+    profile, independent of which way it was laid down."""
+    lo, hi = boxes[o.name]
+    dims = sorted(hi[i] - lo[i] for i in range(3))
+    return (round(dims[0], 4), round(dims[1], 4))
+
+
+def check_sections(objs, boxes):
+    """Members carrying the same section tag must have the same profile.
+
+    The generator writes the section into a custom property, so the model
+    states what each member claims to be. Two objects both tagged
+    SHS 400x400x16 whose profiles measure differently means the profile
+    builder drifted from the label.
+    """
+    groups = defaultdict(list)
+    for o in objs:
+        sec = o.get("section")
+        if sec:
+            groups[sec].append(o)
+
+    bad = []
+    for sec, members in groups.items():
+        counts = Counter(cross_section(o, boxes) for o in members)
+        if len(counts) < 2:
+            continue
+        (common, _), = counts.most_common(1)
+        for o in members:
+            got = cross_section(o, boxes)
+            if got != common:
+                bad.append((o.name, sec, got, common))
+    return bad
+
+
+def check_orientation(objs, boxes):
+    """Members laid down on the wrong axis.
+
+    A column's long axis is vertical. A beam's is not - and its web must
+    stand up, so its vertical extent has to exceed its flange width. Roll
+    a beam 90 degrees about its own axis and that inequality flips, which
+    is the one rotation error a 90-degree-multiple check cannot see.
+    """
+    bad = []
+    for o in objs:
+        fam = family(o.name)
+        lo, hi = boxes[o.name]
+        dx, dy, dz = (hi[i] - lo[i] for i in range(3))
+        if fam == "COLUMN":
+            if dz < max(dx, dy):
+                bad.append((o.name, "column is not standing up",
+                            (round(dx, 3), round(dy, 3), round(dz, 3))))
+        elif fam == "BEAM":
+            span = max(dx, dy)
+            width = min(dx, dy)
+            if dz > span:
+                bad.append((o.name, "beam is standing on end",
+                            (round(dx, 3), round(dy, 3), round(dz, 3))))
+            elif dz < width:
+                bad.append((o.name, "beam web is lying on its side",
+                            (round(dx, 3), round(dy, 3), round(dz, 3))))
+    return bad
+
+
+def check_alignment(objs, boxes):
+    """Members sharing a grid reference must share a centreline.
+
+    Every object carries the grid node it belongs to. Columns stacked at
+    A1 across four storeys, and the pad and base plate under them, all
+    have to sit on one vertical line; a level's columns all have to start
+    at one height. This catches a member nudged off its node without
+    needing to know the grid spacings.
+    """
+    plumb = defaultdict(list)
+    datum = defaultdict(list)
+    for o in objs:
+        ref, lvl = o.get("grid_ref"), o.get("level")
+        fam = family(o.name)
+        if fam not in ("COLUMN", "PAD", "BASEPLATE"):
+            continue
+        lo, hi = boxes[o.name]
+        centre = ((lo[0] + hi[0]) * 0.5, (lo[1] + hi[1]) * 0.5)
+        if ref:
+            plumb[ref].append((o.name, centre))
+        if lvl and fam == "COLUMN":
+            datum[lvl].append((o.name, lo[2]))
+
+    bad = []
+    for ref, members in plumb.items():
+        xs = [c[0] for _, c in members]
+        ys = [c[1] for _, c in members]
+        off = max(max(xs) - min(xs), max(ys) - min(ys))
+        if off > 0.002:
+            bad.append(("grid %s off plumb" % ref, off, members[0][0]))
+    for lvl, members in datum.items():
+        zs = [z for _, z in members]
+        off = max(zs) - min(zs)
+        if off > 0.002:
+            bad.append(("level %s columns not level" % lvl, off,
+                        members[0][0]))
+    return bad
+
+
+def overlap_volume(a, b, boxes):
+    """Volume of the shared bounding boxes, in cubic metres.
+
+    This is the AABB intersection, not a mesh boolean. Every member here
+    is axis-aligned bar the four braces, for which it is an upper bound.
+    A boolean over 3000 objects would take hours to rank findings that
+    penetration depth already ranks.
+    """
+    alo, ahi = boxes[a.name]
+    blo, bhi = boxes[b.name]
+    v = 1.0
+    for i in range(3):
+        v *= max(0.0, min(ahi[i], bhi[i]) - max(alo[i], blo[i]))
+    return v
+
+
 def penetration(a, b, boxes):
     """Depth of the shared volume, in metres.
 
@@ -231,7 +379,8 @@ def check_clashes(objs, boxes, limit_per_pair=6):
                 cache[o.name] = bvh(o)
         if cache[a.name].overlap(cache[b.name]):
             key = tuple(sorted(pair))
-            clashes[key].append((a.name, b.name, penetration(a, b, boxes)))
+            clashes[key].append((a.name, b.name, penetration(a, b, boxes),
+                                 overlap_volume(a, b, boxes)))
     return len(candidates), clashes
 
 
@@ -293,6 +442,15 @@ def report():
 
     fams = Counter(family(o.name) for o in objs)
     print("families:", dict(sorted(fams.items())))
+    # An audit claiming completeness has to show its denominator.
+    unknown = [o.name for o in objs if family(o.name) == "OTHER"]
+    print("coverage: %d meshes, %d classified, %d unclassified%s"
+          % (len(objs), len(objs) - len(unknown), len(unknown),
+             (" -> " + ", ".join(unknown[:5])) if unknown else ""))
+    lo = [min(boxes[o.name][0][i] for o in objs) for i in range(3)]
+    hi = [max(boxes[o.name][1][i] for o in objs) for i in range(3)]
+    print("extents: min (%.2f, %.2f, %.2f)  max (%.2f, %.2f, %.2f) m"
+          % (lo[0], lo[1], lo[2], hi[0], hi[1], hi[2]))
 
     print("\n[1] NON-UNIT SCALE")
     bad = check_scale(objs)
@@ -302,6 +460,24 @@ def report():
 
     print("\n[2] OFF-AXIS ROTATION")
     bad = check_rotation(objs)
+    print("    %d" % len(bad))
+    for row in bad[:8]:
+        print("      ", row)
+
+    print("\n[2b] AXIS ORIENTATION")
+    bad = check_orientation(objs, boxes)
+    print("    %d" % len(bad))
+    for row in bad[:8]:
+        print("      ", row)
+
+    print("\n[2c] SECTION CONSISTENCY")
+    bad = check_sections(objs, boxes)
+    print("    %d members disagree with their section tag" % len(bad))
+    for row in bad[:8]:
+        print("      ", row)
+
+    print("\n[2d] GRID ALIGNMENT")
+    bad = check_alignment(objs, boxes)
     print("    %d" % len(bad))
     for row in bad[:8]:
         print("      ", row)
@@ -341,10 +517,90 @@ def report():
         flag = "PENETRATION" if real else "contact only"
         print("      %-22s %4d overlaps, %4d real   %s"
               % (" x ".join(key), len(rows), len(real), flag))
-        for name_a, name_b, d in sorted(real, key=lambda r: -r[2])[:3]:
-            print("          %6.1f mm  %s | %s" % (d * 1000, name_a, name_b))
+        for nm_a, nm_b, d, vol in sorted(real, key=lambda r: -r[2])[:3]:
+            print("          %6.1f mm  %9.6f m3  %s | %s"
+                  % (d * 1000, vol, nm_a, nm_b))
+
+    findings(objs, boxes, clashes)
+    print("\n" + "=" * 68)
+
+
+# ---------------------------------------------------------------------------
+# Paired findings report
+# ---------------------------------------------------------------------------
+
+def findings(objs, boxes, clashes):
+    """One block per defect, in the schema the review asks for.
+
+    Single-object defects - scale, rotation, section, alignment - leave
+    Object B blank rather than inventing a partner for them.
+    """
+    rows = []
+
+    for name, scale in check_scale(objs):
+        rows.append((name, "", "Object carries a non-unit scale %s; the "
+                     "transform was never applied." % (scale,), "HIGH",
+                     "Apply the scale so the mesh data carries the size. "
+                     "Unapplied scale skews normals through the glTF export."))
+
+    for name, axis, deg in check_rotation(objs):
+        rows.append((name, "", "Rotated %.3f deg about %s, off the 90 deg "
+                     "grid every other member follows." % (deg, axis), "HIGH",
+                     "Snap the rotation to the nearest right angle."))
+
+    for name, sec, got, want in check_sections(objs, boxes):
+        rows.append((name, "", "Tagged %s but measures %s; the rest of that "
+                     "group measures %s." % (sec, got, want), "HIGH",
+                     "Rebuild the profile from the section table so the "
+                     "geometry matches the label the viewer reads."))
+
+    for name, why, dims in check_orientation(objs, boxes):
+        rows.append((name, "", "%s - bounding box %s." % (why, dims), "HIGH",
+                     "Re-place the member on its correct axis."))
+
+    for label, off, example in check_alignment(objs, boxes):
+        rows.append((example, "", "%s by %.1f mm." % (label, off * 1000),
+                     "MEDIUM",
+                     "Re-derive the position from the grid rather than "
+                     "offsetting it by hand."))
+
+    for name, z in check_support(objs, boxes):
+        rows.append((name, "", "Underside at z=%.3f m with nothing beneath "
+                     "it." % z, "HIGH",
+                     "Seat the member on the element that carries it."))
+
+    for group in check_duplicates(objs, boxes):
+        rows.append((group[0], ", ".join(group[1:]),
+                     "%d objects fill exactly the same volume." % len(group),
+                     "MEDIUM",
+                     "Emit the shared element once. Coincident geometry "
+                     "z-fights on screen and doubles the export weight."))
+
+    for key, entries in clashes.items():
+        real = sorted([e for e in entries if e[2] > CONTACT],
+                      key=lambda r: -r[2])
+        if not real:
+            continue
+        nm_a, nm_b, d, vol = real[0]
+        sev = "HIGH" if d > 0.010 else "MEDIUM"
+        rows.append((nm_a, nm_b, "%s members interpenetrate by %.1f mm "
+                     "(%.6f m3 shared); %d such pairs."
+                     % (" x ".join(key), d * 1000, vol, len(real)), sev,
+                     "Trim one member back to the face of the other, or "
+                     "record the pair as a permitted assembly."))
 
     print("\n" + "=" * 68)
+    print("FINDINGS - %d" % len(rows))
+    print("=" * 68)
+    if not rows:
+        print("\nNo defects. Every check above returned clean.")
+        return
+    for i, (a, b, problem, sev, fix) in enumerate(rows, 1):
+        print("\n%d. Object A: %s" % (i, a))
+        print("   Object B: %s" % (b or "-"))
+        print("   Problem:  %s" % problem)
+        print("   Severity: %s" % sev)
+        print("   Correction: %s" % fix)
 
 
 report()

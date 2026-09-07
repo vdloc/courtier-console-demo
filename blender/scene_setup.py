@@ -604,17 +604,35 @@ def build_site_context(rng_seed=7):
     mass_mat = _flat_material("MAT_Site_Surrounds", (0.052, 0.055, 0.058), 0.94)
 
     centre = Vector(((x0 + x1) / 2.0, (y0 + y1) / 2.0, 0.0))
+    # Blocks up to 46 m wide dropped on 24 slots around a 150 m circle sit
+    # about 39 m apart, so drawn blind they grew into each other - two of
+    # them shared 7000 cubic metres. Reject a placement that lands inside
+    # one already standing, and shrink the footprint as the attempts run
+    # out so a crowded slot still gets a building.
+    placed = []
     for index in range(24):
-        angle = (index / 24.0) * math.tau + rng.uniform(-0.05, 0.05)
-        radius = rng.uniform(110.0, 190.0)
-        width = rng.uniform(16.0, 46.0)
-        depth = rng.uniform(14.0, 38.0)
+        for attempt in range(24):
+            angle = (index / 24.0) * math.tau + rng.uniform(-0.05, 0.05)
+            radius = rng.uniform(110.0, 190.0)
+            shrink = 1.0 - 0.03 * attempt
+            width = rng.uniform(16.0, 46.0) * shrink
+            depth = rng.uniform(14.0, 38.0) * shrink
+            yaw = jitter(28.0)
+            cx = centre.x + math.cos(angle) * radius
+            cy = centre.y + math.sin(angle) * radius
+            # Half-extents of the footprint once it is turned on the spot.
+            c, s = abs(math.cos(yaw)), abs(math.sin(yaw))
+            hx = (width * c + depth * s) / 2.0
+            hy = (width * s + depth * c) / 2.0
+            if all(abs(cx - px) > hx + phx or abs(cy - py) > hy + phy
+                   for px, py, phx, phy in placed):
+                break
+        placed.append((cx, cy, hx, hy))
+
         tall = rng.uniform(5.0, 16.0)
         _site_box("Site_Surround_%02d" % index, (width, depth, tall),
-                  (centre.x + math.cos(angle) * radius,
-                   centre.y + math.sin(angle) * radius,
-                   ground_z + tall / 2.0),
-                  context, mass_mat, jitter(28.0))
+                  (cx, cy, ground_z + tall / 2.0),
+                  context, mass_mat, yaw)
 
     total = len(site.objects) + len(context.objects)
     print("[scene_setup] site context: %d objects (%d surrounds)"
