@@ -141,10 +141,15 @@ MATERIALS = {
     },
     "MAT_Pipe_CHW": {
         "kind": "painted_metal",
-        "base_color": (0.045, 0.115, 0.290),      # BS 1710 chilled water blue
+        # BS 1710 chilled water blue, pulled a third of the way to its own
+        # luminance. The catalogue colour is right for a paint chip and wrong
+        # for a pipe: on site it carries a fortnight of dust and reads far
+        # duller than the spec swatch. Left saturated, at gloss, against dark
+        # steel, the services were the most plastic thing in the frame.
+        "base_color": (0.069, 0.114, 0.228),
         "metallic": 0.10,
-        "roughness": 0.36,
-        "paint_variation": 0.060,
+        "roughness": 0.54,
+        "paint_variation": 0.220,
         "scratch_density": 0.70,
         "scratch_roughness": 0.28,
         "bare_metal": (0.500, 0.510, 0.520),
@@ -156,10 +161,10 @@ MATERIALS = {
     },
     "MAT_Pipe_LTHW": {
         "kind": "painted_metal",
-        "base_color": (0.280, 0.045, 0.055),      # BS 1710 heating red
+        "base_color": (0.216, 0.063, 0.069),      # BS 1710 heating red, dulled
         "metallic": 0.10,
-        "roughness": 0.36,
-        "paint_variation": 0.060,
+        "roughness": 0.54,
+        "paint_variation": 0.220,
         "scratch_density": 0.70,
         "scratch_roughness": 0.28,
         "bare_metal": (0.500, 0.510, 0.520),

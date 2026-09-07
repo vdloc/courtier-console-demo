@@ -106,6 +106,14 @@ SCENE = {
     # 7016 steel at 0.055 albedo has to land as dark grey, not as the mid grey
     # a generous exposure turns it into.
     "exposure": -0.8,
+    # Scattering per metre of air. Solved for the effect wanted rather than
+    # guessed: extinction is 1-exp(-density*distance), so 1.2e-3 puts a 7 per
+    # cent veil on the frame at 60 m and 18 per cent on the massing at 170 m.
+    # That is a clear dry day. The first attempt at 1.6e-4 was arithmetically
+    # invisible - 2 per cent at 150 m - and cost a render to discover.
+    # Cheap on CPU only while the volume stays homogeneous and volume bounces
+    # stay at zero; see setup_render.
+    "haze_density": 0.0012,
     "film_transparent": False,
 }
 
@@ -132,6 +140,12 @@ def setup_world():
 
     out = nodes.new("ShaderNodeOutputWorld")
     out.location = (900, 0)
+
+    # Aerial perspective is a bounded box, not a world volume - see
+    # setup_atmosphere(). A world volume in Cycles fills infinite space, so
+    # every camera ray that reaches the sky accumulates infinite extinction
+    # and the frame renders solid black. It does it quickly and without a
+    # warning, which is a memorable forty seconds.
 
     # Two Background nodes off one sky, mixed on Is Camera Ray.
     #
@@ -236,6 +250,51 @@ def setup_sun():
     sun.rotation_mode = "QUATERNION"
     sun.rotation_quaternion = (-direction).to_track_quat("-Z", "Y")
     return sun
+
+
+def setup_atmosphere():
+    """A finite box of haze around the whole site.
+
+    Without it the massing at 150 m renders at exactly the contrast of the
+    steel at 60 m, and the eye reads the frame as a flat cut-out: once the
+    sun angle is shared there is no other depth cue at that range.
+
+    It has to be a bounded object. The same scatter node on the World fills
+    infinite space, so any ray that escapes to the sky picks up infinite
+    extinction and the render comes back black.
+
+    The box must contain every camera - the elevation shot stands 120 m out
+    - or the camera sits outside the haze and the effect vanishes from that
+    angle only, which is a confusing thing to debug.
+    """
+    for stale in ("Site_Atmosphere",):
+        existing = bpy.data.objects.get(stale)
+        if existing:
+            bpy.data.objects.remove(existing, do_unlink=True)
+
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(14.4, 9.0, 110.0))
+    box = bpy.context.active_object
+    box.name = "Site_Atmosphere"
+    box.scale = (900.0, 900.0, 320.0)
+    box.display_type = "WIRE"
+    box.visible_shadow = False
+
+    mat = bpy.data.materials.get("MAT_Site_Atmosphere")
+    if mat is None:
+        mat = bpy.data.materials.new("MAT_Site_Atmosphere")
+    mat.use_nodes = True
+    nodes, links = mat.node_tree.nodes, mat.node_tree.links
+    nodes.clear()
+    out = nodes.new("ShaderNodeOutputMaterial")
+    haze = nodes.new("ShaderNodeVolumeScatter")
+    haze.location = (-220, 0)
+    haze.inputs["Density"].default_value = SCENE["haze_density"]
+    haze.inputs["Anisotropy"].default_value = 0.32   # forward-scattering air
+    haze.inputs["Color"].default_value = (0.62, 0.70, 0.82, 1.0)
+    links.new(haze.outputs["Volume"], out.inputs["Volume"])
+    box.data.materials.clear()
+    box.data.materials.append(mat)
+    return box
 
 
 def setup_ground():
@@ -483,8 +542,14 @@ def _flat_material(name, rgb, roughness=0.85, metallic=0.0):
     return mat
 
 
-def _site_box(name, size, location, collection, material, rotation_z=0.0):
-    """An axis-aligned box of a given real size, placed by its centre."""
+def _site_box(name, size, location, collection, material, rotation_z=0.0,
+              pitch=0.0):
+    """A box of a given real size, placed by its centre.
+
+    `pitch` tilts it about its own transverse axis before the yaw is
+    applied, which is what a luffed crane boom needs: everything else on
+    site sits flat and leaves it at zero.
+    """
     mesh = bpy.data.meshes.new(name)
     obj = bpy.data.objects.new(name, mesh)
 
@@ -495,7 +560,10 @@ def _site_box(name, size, location, collection, material, rotation_z=0.0):
     bm.free()
 
     obj.location = location
-    obj.rotation_euler = (0.0, 0.0, rotation_z)
+    # YXZ so the pitch is taken about the box's own transverse axis and the
+    # yaw is applied to the already-tilted member, not the other way round.
+    obj.rotation_mode = "ZYX"
+    obj.rotation_euler = (0.0, -pitch, rotation_z)
     obj.data.materials.append(material)
     collection.objects.link(obj)
     return obj
@@ -582,6 +650,89 @@ def build_scale_references(site, rng, jitter, ground_z, bounds):
         _site_box("Site_Scrub_%02d" % i,
                   (rng.uniform(0.30, 0.75), rng.uniform(0.25, 0.60), h),
                   (x, y, ground_z + h * 0.5), site, scrub, jitter(180.0))
+
+
+def build_crawler_crane(site, ground_z, base, yaw, materials, boom_ang):
+    """A crawler crane with its boom over the laydown.
+
+    Steel at this height did not walk up. Without a lift on site the frame
+    reads as a finished object that was always there, and every other
+    construction cue - the laydown, the hoarding, the edge protection - is
+    describing a phase that has no machine to deliver it.
+
+    A luffed lattice boom, so the silhouette is right from the hero camera:
+    tracks, a slewing deck with a counterweight, and a boom raised toward
+    the bundles it is there to lift. The lattice is four chords and a
+    diagonal per bay rather than a real chord-and-lacing pattern - at 60 m
+    that is the difference between a boom and a solid stick, and no more.
+    """
+    steel, dark, tyre = materials
+    bx, by = base
+    c, s = math.cos(yaw), math.sin(yaw)
+
+    def at(dx, dy, dz):
+        return (bx + dx * c - dy * s, by + dx * s + dy * c, ground_z + dz)
+
+    # Crawler tracks: 5.6 m long, 1.0 m wide, on 3.4 m centres.
+    for side in (-1, 1):
+        _site_box("Site_Crane_Track_%s" % ("R" if side > 0 else "L"),
+                  (5.60, 1.00, 1.10), at(0.0, side * 1.70, 0.55),
+                  site, tyre, yaw)
+    _site_box("Site_Crane_Carbody", (4.20, 2.60, 0.70), at(0.0, 0.0, 1.15),
+              site, steel, yaw)
+
+    # Slewing deck, cab and counterweight.
+    deck_z = 1.50
+    _site_box("Site_Crane_Deck", (6.40, 3.00, 1.00), at(-0.60, 0.0, deck_z),
+              site, steel, yaw)
+    _site_box("Site_Crane_Cab", (2.20, 1.90, 2.00), at(1.60, -0.75, deck_z + 1.5),
+              site, dark, yaw)
+    _site_box("Site_Crane_Counterweight", (1.60, 3.20, 1.80),
+              at(-3.30, 0.0, deck_z + 1.4), site, dark, yaw)
+
+    # Luffed lattice boom. The angle is not a look - it is solved so the
+    # head lands over the laydown, because that is what fixes where the
+    # hook hangs. Aimed by eye instead, the boom either grazed the roof
+    # edge beam or, pulled back to clear it, dropped its rope through the
+    # middle of the frame.
+    boom_len = 28.0
+    foot = (2.40, 0.0, deck_z + 0.90)
+    cb, sb = math.cos(boom_ang), math.sin(boom_ang)
+    width = 1.30
+    bays = 14
+
+    for i in range(bays):
+        t0, t1 = i * boom_len / bays, (i + 1) * boom_len / bays
+        for dy in (-width / 2, width / 2):
+            for dz in (-width / 2, width / 2):
+                # Chord segment: a thin box along the boom axis.
+                mid = (t0 + t1) / 2
+                _site_box(
+                    "Site_Crane_Chord_%02d_%d%d"
+                    % (i, dy > 0, dz > 0),
+                    (boom_len / bays + 0.04, 0.10, 0.10),
+                    at(foot[0] + mid * cb - dz * sb, foot[1] + dy,
+                       foot[2] + mid * sb + dz * cb),
+                    site, steel, yaw, pitch=boom_ang)
+        # One diagonal per bay per side, alternating direction.
+        for dy in (-width / 2, width / 2):
+            _site_box("Site_Crane_Lace_%02d_%d" % (i, dy > 0),
+                      (boom_len / bays * 1.25, 0.07, 0.07),
+                      at(foot[0] + (t0 + t1) / 2 * cb, foot[1] + dy,
+                         foot[2] + (t0 + t1) / 2 * sb),
+                      site, steel, yaw,
+                      pitch=boom_ang + math.radians(52.0 * (-1) ** i))
+
+    # Head, hoist rope and block, hanging plumb over the laydown.
+    head = (foot[0] + boom_len * cb, foot[1], foot[2] + boom_len * sb)
+    _site_box("Site_Crane_Head", (0.90, 1.40, 0.70),
+              at(head[0], head[1], head[2]), site, dark, yaw)
+    rope_top, rope_bot = head[2] - 0.35, 7.40
+    _site_box("Site_Crane_Rope", (0.06, 0.06, rope_top - rope_bot),
+              at(head[0], head[1], (rope_top + rope_bot) / 2),
+              site, dark, yaw)
+    _site_box("Site_Crane_Block", (0.44, 0.36, 1.00),
+              at(head[0], head[1], rope_bot - 0.50), site, dark, yaw)
 
 
 def build_site_context(rng_seed=7):
@@ -780,6 +931,30 @@ def build_site_context(rng_seed=7):
 
     build_scale_references(site, rng, jitter, ground_z, (x0, x1, y0, y1))
 
+    # West of the frame, boom slewed east over the laydown at x 0.1 to 7.9.
+    # Far enough out that the boom clears the west elevation, close enough
+    # that the hook is over the steel it is there to lift.
+    crane_mats = (
+        _flat_material("MAT_Site_Crane", (0.185, 0.155, 0.045), 0.52,
+                       metallic=0.30),
+        _flat_material("MAT_Site_CraneDark", (0.030, 0.032, 0.036), 0.66,
+                       metallic=0.35),
+        _flat_material("MAT_Site_Track", (0.020, 0.021, 0.024), 0.90),
+    )
+    # Sited south-west of the frame and slewed onto the laydown, so the boom
+    # stays south of y=0 and never crosses the building at all. The angle is
+    # solved from the geometry rather than picked: the head has to arrive
+    # over the bundles, 2.19 m of which is taken up by the boom foot's own
+    # offset from the slew centre.
+    crane_at = (-9.0, -10.5)
+    hook_over = (4.0, -6.0)
+    reach = math.hypot(hook_over[0] - crane_at[0], hook_over[1] - crane_at[1])
+    crane_yaw = math.atan2(hook_over[1] - crane_at[1],
+                           hook_over[0] - crane_at[0])
+    boom_angle = math.acos(min(1.0, (reach - 2.19) / 28.0))
+    build_crawler_crane(site, ground_z, crane_at, crane_yaw, crane_mats,
+                        boom_angle)
+
     total = len(site.objects) + len(context.objects)
     print("[scene_setup] site context: %d objects (%d surrounds)"
           % (total, len(context.objects)))
@@ -878,6 +1053,15 @@ def setup_render(engine=None):
         scene.cycles.transmission_bounces = 2
         scene.cycles.caustics_reflective = False
         scene.cycles.caustics_refractive = False
+
+        # The world haze is homogeneous, so it needs no fine stepping and no
+        # multiple scattering to read correctly. Both are what make volumes
+        # expensive on CPU; left at their defaults this haze roughly triples
+        # the render. A single scatter event at a coarse step is
+        # indistinguishable here and close to free.
+        scene.cycles.volume_bounces = 0
+        scene.cycles.volume_max_steps = 16
+        scene.cycles.volume_step_rate = 8.0
     else:
         eevee = scene.eevee
         eevee.taa_render_samples = SCENE["eevee_samples"]
@@ -928,6 +1112,7 @@ def setup(shot="hero", engine=None):
     setup_world()
     setup_sun()
     setup_ground()
+    setup_atmosphere()
     build_site_context()
     camera = setup_camera(shot)
     setup_render(engine)

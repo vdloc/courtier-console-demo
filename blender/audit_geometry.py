@@ -56,6 +56,7 @@ def family(name):
         ("Site_Worker_", "WORKER"),
         ("Site_Van_", "VAN"),
         ("Site_Scrub_", "SCRUB"),
+        ("Site_Crane_", "CRANE"),
     ):
         if name.startswith(prefix):
             return fam
@@ -63,7 +64,8 @@ def family(name):
 
 
 SITE = ("HOARDING", "CABIN", "SKIP", "BUNDLE", "BEARER", "BARRIER",
-        "SPOIL", "SURROUND", "GROUND", "WORKER", "VAN", "SCRUB")
+        "SPOIL", "SURROUND", "GROUND", "WORKER", "VAN", "SCRUB",
+        "CRANE")
 
 
 # Pairs whose members are fabricated to occupy the same volume.
@@ -109,12 +111,20 @@ PERMITTED |= {frozenset(p) for p in (
     ("WORKER", "WORKER"), ("WORKER", "GROUND"),
     ("VAN", "VAN"), ("VAN", "GROUND"),
     ("SCRUB", "GROUND"), ("SCRUB", "SCRUB"), ("SCRUB", "HOARDING"),
+    # A lattice boom is chords and lacing bolted into each other.
+    ("CRANE", "CRANE"), ("CRANE", "GROUND"),
 )}
 
 
 def targets():
-    """Every mesh in the file. Empties and the camera carry no geometry."""
-    return [o for o in bpy.data.objects if o.type == 'MESH']
+    """Every mesh in the file. Empties and the camera carry no geometry.
+
+    Site_Atmosphere is the one exclusion: it is a haze volume sized to
+    contain the entire scene and every camera, so it encloses all 3258
+    objects by design and would report a clash against each of them.
+    """
+    return [o for o in bpy.data.objects
+            if o.type == 'MESH' and o.name != "Site_Atmosphere"]
 
 
 # ---------------------------------------------------------------------------
