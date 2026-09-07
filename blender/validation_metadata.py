@@ -25,7 +25,17 @@ construction.
 import bpy
 
 TOL = 0.005
-MAX_LISTED = 8
+MAX_LISTED = 4
+
+# Run this BEFORE assembly_animation.py. The animation keys every object to
+# an exploded start position, and matrix_world is evaluated at the current
+# frame - annotate afterwards and 2032 of 2993 members report as touching
+# nothing, because at frame 1 they genuinely are.
+
+# Fasteners are excluded. A bolt's connections are not something anyone
+# inspects in the viewer, and 1888 bolts and welds carrying a neighbour list
+# each tripled the GLB on their own.
+SKIP = ("Bolt", "Weld")
 
 # Name prefix -> the human type the report asks for.
 TYPES = (
@@ -84,7 +94,7 @@ def annotate():
     bpy.context.view_layer.update()
 
     objs = [o for o in bpy.data.objects
-            if o.type == 'MESH' and kind(o.name)]
+            if o.type == 'MESH' and kind(o.name) and kind(o.name) not in SKIP]
     boxes = {o.name: world_box(o) for o in objs}
 
     # Broad phase on X so this stays a few hundred thousand tests rather

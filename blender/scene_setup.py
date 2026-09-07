@@ -346,7 +346,7 @@ def build_ground_material(mat):
     colour.location = (-150, 120)
     base = SCENE["ground_color"]
     wet = tuple(c * 0.55 for c in base[:3])
-    dry = tuple(min(1.0, c * 2.4) for c in base[:3])
+    dry = tuple(min(1.0, c * 1.85) for c in base[:3])
     _ramp(colour, ((0.30, _rgba(wet)), (0.72, _rgba(dry))))
 
     rough = nodes.new("ShaderNodeMapRange")
@@ -354,13 +354,70 @@ def build_ground_material(mat):
     rough.inputs["To Min"].default_value = 0.62   # damp, still reflective
     rough.inputs["To Max"].default_value = 0.98   # dried out, fully matte
 
+    # Traffic. Everything above describes ground that nothing has driven on,
+    # which on a live site is the remaining tell: plant tracks the same arc
+    # between the gate and the frame all day. A noise stretched hard along one
+    # axis reads as ruts rather than patches, and a radial falloff centred on
+    # the frame keeps the churn where the wheels actually go instead of
+    # spreading it evenly to the horizon.
+    ruts_map = nodes.new("ShaderNodeMapping")
+    ruts_map.location = (-780, -380)
+    ruts_map.inputs["Scale"].default_value = (0.10, 1.60, 1.0)
+
+    ruts = nodes.new("ShaderNodeTexNoise")
+    ruts.location = (-600, -380)
+    ruts.inputs["Scale"].default_value = 0.55
+    ruts.inputs["Detail"].default_value = 3.0
+    ruts.inputs["Roughness"].default_value = 0.80
+
+    # Push the stretched noise toward two tones. Left as a smooth gradient it
+    # averages out into a vignette; ruts are the contrast between churned and
+    # unchurned ground, not a gentle fade between them.
+    rut_contrast = nodes.new("ShaderNodeMapRange")
+    rut_contrast.location = (-470, -380)
+    rut_contrast.inputs["From Min"].default_value = 0.42
+    rut_contrast.inputs["From Max"].default_value = 0.60
+    rut_contrast.clamp = True
+
+    # Distance from the site centre, remapped so the churn fades out by ~55 m.
+    haul = nodes.new("ShaderNodeTexGradient")
+    haul.gradient_type = "SPHERICAL"
+    haul.location = (-600, -560)
+    haul_map = nodes.new("ShaderNodeMapping")
+    haul_map.location = (-780, -560)
+    # The plane's own origin is already the frame centre, so object
+    # coordinates need no offset. 1/0.018 puts the falloff at ~55 m.
+    haul_map.inputs["Scale"].default_value = (0.018, 0.018, 0.018)
+
+    churn = nodes.new("ShaderNodeMix")
+    churn.data_type = "FLOAT"
+    churn.blend_type = "MULTIPLY"
+    churn.location = (-380, -420)
+    churn.inputs["Factor"].default_value = 1.0
+
+    worn = nodes.new("ShaderNodeMix")
+    worn.data_type = "RGBA"
+    worn.location = (60, 120)
+    worn.inputs["Factor"].default_value = 0.62
+    worn.inputs[7].default_value = _rgba(tuple(c * 0.60 for c in base[:3]))
+
     links.new(coords.outputs["Object"], patch.inputs["Vector"])
     links.new(coords.outputs["Object"], grain.inputs["Vector"])
+    links.new(coords.outputs["Object"], ruts_map.inputs["Vector"])
+    links.new(coords.outputs["Object"], haul_map.inputs["Vector"])
+    links.new(ruts_map.outputs["Vector"], ruts.inputs["Vector"])
+    links.new(haul_map.outputs["Vector"], haul.inputs["Vector"])
     links.new(patch.outputs["Fac"], mix_noise.inputs[2])
     links.new(grain.outputs["Fac"], mix_noise.inputs[3])
     links.new(mix_noise.outputs[0], colour.inputs["Fac"])
     links.new(mix_noise.outputs[0], rough.inputs["Value"])
-    links.new(colour.outputs["Color"], bsdf.inputs["Base Color"])
+    # Ruts only where the gradient says vehicles reach.
+    links.new(ruts.outputs["Fac"], rut_contrast.inputs["Value"])
+    links.new(rut_contrast.outputs["Result"], churn.inputs[2])
+    links.new(haul.outputs["Fac"], churn.inputs[3])
+    links.new(colour.outputs["Color"], worn.inputs[6])
+    links.new(churn.outputs[0], worn.inputs["Factor"])
+    links.new(worn.outputs[2], bsdf.inputs["Base Color"])
     links.new(rough.outputs["Result"], bsdf.inputs["Roughness"])
     links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
     return mat
@@ -442,6 +499,89 @@ def _site_box(name, size, location, collection, material, rotation_z=0.0):
     obj.data.materials.append(material)
     collection.objects.link(obj)
     return obj
+
+
+def build_scale_references(site, rng, jitter, ground_z, bounds):
+    """Workers, a van and scrub - the objects that state the frame's size.
+
+    A viewer has no prior for "four-storey steel frame" but an exact one for
+    "person". Until something of known height stands next to it, the frame
+    could be a model on a desk, and every other realism cue is spent arguing
+    with that.
+
+    The figures are deliberately coarse - a hi-vis mass on legs, no face, no
+    hands. Next to correctly rolled IPE profiles and bolted end plates, a
+    detailed-but-wrong human is far more damaging than an obviously
+    schematic one, so these are kept small in frame and placed well away
+    from the two close shots. `detail` sits at (4.2, -3.4) and `corner` at
+    (34, -22): nothing here goes near either sight line.
+    """
+    x0, x1, y0, y1 = bounds
+    hiviz = _flat_material("MAT_Site_HiViz", (0.640, 0.230, 0.020), 0.70)
+    trews = _flat_material("MAT_Site_Workwear", (0.045, 0.055, 0.075), 0.85)
+    helmet = _flat_material("MAT_Site_Helmet", (0.520, 0.480, 0.060), 0.42)
+    van_mat = _flat_material("MAT_Site_Van", (0.400, 0.400, 0.405), 0.38,
+                             metallic=0.55)
+    glass = _flat_material("MAT_Site_Glass", (0.020, 0.028, 0.035), 0.16,
+                           metallic=0.80)
+    tyre = _flat_material("MAT_Site_Tyre", (0.016, 0.016, 0.018), 0.94)
+    scrub = _flat_material("MAT_Site_Scrub", (0.055, 0.070, 0.030), 0.90)
+
+    def worker(tag, x, y, facing):
+        """1.78 m to the top of the hat, which is the whole point of it."""
+        yaw = facing + jitter(12.0)
+        for name, size, dz, mat in (
+            ("Legs", (0.40, 0.28, 0.84), 0.42, trews),
+            ("Torso", (0.46, 0.30, 0.62), 1.15, hiviz),
+            ("Head", (0.19, 0.20, 0.24), 1.58, trews),
+            ("Helmet", (0.27, 0.28, 0.10), 1.73, helmet),
+        ):
+            _site_box("Site_Worker_%s_%s" % (tag, name), size,
+                      (x, y, ground_z + dz), site, mat, yaw)
+
+    # South-east of the frame, in the hero camera's view but nowhere near
+    # the detail shot; one pair working, one alone by the laydown.
+    worker("01", 21.6, -3.2, math.radians(20.0))
+    worker("02", 23.1, -2.4, math.radians(-150.0))
+    worker("03", 33.0, 12.4, math.radians(115.0))
+    worker("04", 8.8, 21.0, math.radians(-70.0))
+
+    # A 5.4 m panel van, nosed in against the near hoarding. The strip
+    # between the hoarding at y=-14 and the barrier line at y=-6.5 is the
+    # only clear ground on this side: the laydown fills x 0.1 to 7.9 and the
+    # barriers run from x 9.9 east, so the van goes east of the laydown and
+    # south of the barriers, and west of the skip at x 21.0 to 24.6.
+    vx, vy, vyaw = 14.0, y0 + 3.2, math.radians(84.0)
+    c, s = math.cos(vyaw), math.sin(vyaw)
+
+    def at(dx, dy, dz):
+        return (vx + dx * c - dy * s, vy + dx * s + dy * c, ground_z + dz)
+
+    _site_box("Site_Van_Body", (3.40, 2.02, 1.72), at(-0.75, 0, 1.30),
+              site, van_mat, vyaw)
+    _site_box("Site_Van_Cab", (1.95, 1.98, 1.16), at(1.68, 0, 1.05),
+              site, van_mat, vyaw)
+    _site_box("Site_Van_Screen", (0.10, 1.80, 0.72), at(2.52, 0, 1.32),
+              site, glass, vyaw)
+    for i, (dx, dy) in enumerate(((1.72, 0.94), (1.72, -0.94),
+                                  (-1.52, 0.94), (-1.52, -0.94))):
+        _site_box("Site_Van_Wheel_%d" % i, (0.68, 0.24, 0.68),
+                  at(dx, dy, 0.34), site, tyre, vyaw)
+
+    # Scrub along the hoarding line. Nothing is mown on a live site, and the
+    # strip the plant never reaches is where weed comes through first.
+    for i in range(46):
+        edge = rng.random()
+        if edge < 0.5:
+            x = rng.uniform(x0, x1)
+            y = (y0 if edge < 0.25 else y1) + rng.uniform(-0.9, 0.9)
+        else:
+            y = rng.uniform(y0, y1)
+            x = (x0 if edge < 0.75 else x1) + rng.uniform(-0.9, 0.9)
+        h = rng.uniform(0.22, 0.55)
+        _site_box("Site_Scrub_%02d" % i,
+                  (rng.uniform(0.30, 0.75), rng.uniform(0.25, 0.60), h),
+                  (x, y, ground_z + h * 0.5), site, scrub, jitter(180.0))
 
 
 def build_site_context(rng_seed=7):
@@ -637,6 +777,8 @@ def build_site_context(rng_seed=7):
         _site_box("Site_Surround_%02d" % index, (width, depth, tall),
                   (cx, cy, ground_z + tall / 2.0),
                   context, mass_mat, yaw)
+
+    build_scale_references(site, rng, jitter, ground_z, (x0, x1, y0, y1))
 
     total = len(site.objects) + len(context.objects)
     print("[scene_setup] site context: %d objects (%d surrounds)"

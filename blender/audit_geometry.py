@@ -53,6 +53,9 @@ def family(name):
         ("Site_Barrier_", "BARRIER"),
         ("Site_Spoil_", "SPOIL"),
         ("Site_Surround_", "SURROUND"),
+        ("Site_Worker_", "WORKER"),
+        ("Site_Van_", "VAN"),
+        ("Site_Scrub_", "SCRUB"),
     ):
         if name.startswith(prefix):
             return fam
@@ -60,7 +63,7 @@ def family(name):
 
 
 SITE = ("HOARDING", "CABIN", "SKIP", "BUNDLE", "BEARER", "BARRIER",
-        "SPOIL", "SURROUND", "GROUND")
+        "SPOIL", "SURROUND", "GROUND", "WORKER", "VAN", "SCRUB")
 
 
 # Pairs whose members are fabricated to occupy the same volume.
@@ -101,6 +104,11 @@ PERMITTED |= {frozenset(p) for p in (
     ("SPOIL", "GROUND"), ("CABIN", "GROUND"), ("SKIP", "GROUND"),
     ("HOARDING", "GROUND"), ("BARRIER", "GROUND"), ("SURROUND", "GROUND"),
     ("PAD", "GROUND"), ("CABIN", "CABIN"), ("BARRIER", "BARRIER"),
+    # A person is modelled as stacked parts and stands on the ground; a van
+    # is a body, a cab and four wheels that touch each other by design.
+    ("WORKER", "WORKER"), ("WORKER", "GROUND"),
+    ("VAN", "VAN"), ("VAN", "GROUND"),
+    ("SCRUB", "GROUND"), ("SCRUB", "SCRUB"), ("SCRUB", "HOARDING"),
 )}
 
 
