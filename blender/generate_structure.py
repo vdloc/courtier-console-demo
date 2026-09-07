@@ -71,7 +71,10 @@ CONFIG = {
     "rc_beam_edge": {"h": 0.500, "b": 0.250},
 
     # --- foundations --------------------------------------------------------
-    "pad": {"b": 2.400, "d": 2.400, "t": 0.700, "top_z": -0.100},
+    # No top_z: the pad top is derived from the base plate thickness so the
+    # two cannot drift apart. Held as independent numbers they did, and the
+    # frame ended up standing on a 60 mm void.
+    "pad": {"b": 2.400, "d": 2.400, "t": 0.700},
 
     # --- connections --------------------------------------------------------
     # Fabrication detail. Each flag adds real objects, so they are switchable:
@@ -91,10 +94,13 @@ CONFIG = {
 
     "end_plate": {"t": 0.020, "margin": 0.060},   # flush end plate
     "stiffener": {"t": 0.012},
+    "haunch_rib": 0.140,             # rib depth below the beam bottom flange
     "shear_stud": {"d": 0.019, "h": 0.100, "spacing": 0.300},
 
     "base_plate": {"b": 0.700, "d": 0.700, "t": 0.040},
     "splice_plate": {"b": 0.320, "h": 0.500, "t": 0.020},
+    "splice_lift": 0.600,            # splice height above the floor line
+    "rail_offset": 0.250,            # edge protection stands off the frame
     "gusset": {"leg": 0.360, "t": 0.015},
     "bolt": {"shank_d": 0.024, "head_d": 0.042, "head_t": 0.016, "grip": 0.070},
     "weld_leg": 0.010,
@@ -550,7 +556,8 @@ def build_foundations(collection, empty):
             ref = grid_ref(ix, iy)
             obj = make_box("Concrete_Pad_Foundation_%s" % ref,
                            (pad["b"], pad["d"], pad["t"]), collection)
-            place(obj, (x, y, pad["top_z"] - pad["t"] * 0.5))
+            top_z = -CONFIG["base_plate"]["t"]
+            place(obj, (x, y, top_z - pad["t"] * 0.5))
             assign_material(obj, "MAT_Concrete")
             add_quality_modifiers(obj, width=0.010)
             tag(obj, "foundation", "L00", ref,
@@ -697,7 +704,8 @@ def _beam_end_details(level, ref, origin, yaw, sec, collection, empty):
     # Visible, unlike the internal diaphragm an SHS column would really get.
     if CONFIG["detail"]["stiffeners"]:
         rib = make_wedge("Bracket_Stiffener_%s_%s" % (level, ref),
-                         0.140, CONFIG["stiffener"]["t"], collection)
+                         CONFIG["haunch_rib"], CONFIG["stiffener"]["t"],
+                         collection)
         place(rib, origin + forward * 0.012 + Vector((0.0, 0.0, -sec["h"] * 0.5)),
               (0.0, 0.0, yaw + math.radians(180.0)))
         assign_material(rib, "MAT_Steel_Painted")
@@ -805,13 +813,32 @@ def build_bracing(collection, empty):
     ring_o = circle_points(cfg["od"] * 0.5, segments)
     ring_i = circle_points(cfg["od"] * 0.5 - cfg["t"], segments)
     z0, z1 = zs[0], zs[1]
+    # A grid node is a working point, not a piece of steel. Aimed straight at
+    # it, the brace buried its lower end 76 mm under the base plate and drove
+    # its upper end through the edge beam. Hold both ends back to the face of
+    # what is actually there: clear above the base plate, clear below the beam
+    # soffit, and outside the column.
+    r = cfg["od"] * 0.5
+    clear = 0.010
+    # Held back to the column face the brace ends float, connected to
+    # nothing. Run them a quarter width past the face instead, so each end
+    # dies into the column it braces the way a gusseted end really does.
+    inset = CONFIG["col_ground"]["b"] * 0.25
+    z_bot = z0 + CONFIG["base_plate"]["t"] + r + clear
+    # The beam soffit is not the lowest thing at that node: the end plate
+    # hangs a margin below it and the haunch rib hangs deeper still. Clear
+    # whichever of the two actually reaches furthest down.
+    node_drop = CONFIG["end_plate"]["margin"]
+    if CONFIG["detail"]["stiffeners"]:
+        node_drop = max(node_drop, CONFIG["haunch_rib"])
+    z_top = z1 - CONFIG["beam_edge"]["h"] - node_drop - r - clear
     made = []
 
     for iy in (0, len(ys) - 1):
         y = ys[iy]
         for ix in (0, len(xs) - 2):
-            start = Vector((xs[ix], y, z0))
-            delta = Vector((xs[ix + 1], y, z1)) - start
+            start = Vector((xs[ix] + inset, y, z_bot))
+            delta = Vector((xs[ix + 1] - inset, y, z_top)) - start
 
             ref = "%s-%s" % (grid_ref(ix, iy), grid_ref(ix + 1, iy))
             obj = extrude_profile("Steel_Brace_Diagonal_L00_%s" % ref,
@@ -965,9 +992,13 @@ def build_connections(collection, empty):
                 (col0["b"] * 0.5, 0.0, math.radians(90.0)),
                 (-col0["b"] * 0.5, 0.0, math.radians(-90.0)),
             )
+            # Each run stops one leg short of the corner so the four mitre
+            # against each other. Run full width they overlapped by a leg at
+            # every corner - a doubled bead no welder would lay.
+            leg = CONFIG["weld_leg"]
             for k, (dx, dy, yaw) in enumerate(seams):
                 weld = _weld_fillet("Weld_Fillet_Base_L00_%s_%d" % (ref, k + 1),
-                                    col0["b"], CONFIG["weld_leg"], collection)
+                                    col0["b"] - 2 * leg, leg, collection)
                 place(weld, (x + dx, y + dy, 0.0), (0.0, 0.0, yaw))
                 assign_material(weld, "MAT_Weld_Bead")
                 add_quality_modifiers(weld, bevel=False)
@@ -977,8 +1008,13 @@ def build_connections(collection, empty):
                 made.append(weld)
 
     # --- column splice plates at every intermediate level ------------------
+    # A column splice never sits on the floor line - that is where the beams,
+    # their end plates and their welds all arrive. Real splices are lifted
+    # clear of the connection zone, roughly 600 mm above the floor, which is
+    # also where an erector can reach the bolts.
+    splice_lift = CONFIG["splice_lift"]
     for li in range(1, len(CONFIG["storeys"])):
-        z = zs[li]
+        z = zs[li] + splice_lift
         lname = level_name(li)
         sec = column_section(li)
 
@@ -1007,6 +1043,13 @@ def build_connections(collection, empty):
                         collection, empty, lname, ref)
 
     # --- gusset brackets at beam-to-column nodes ---------------------------
+    # A gusset is a fin plate: the beam web bolts to it. That is an
+    # alternative to a flush end plate, not a companion to one. Built with
+    # both, every node carried two different connections occupying the same
+    # 10 mm of space. Only draw these when the end plates are switched off.
+    if CONFIG["detail"]["end_plates"]:
+        return made
+
     for li in range(1, len(zs)):
         z = zs[li]
         lname = level_name(li)
@@ -1125,11 +1168,16 @@ def build_accessories(collection, empty):
         z = zs[li]
         lname = level_name(li)
 
+        # Edge protection clamps to the slab edge, which is outboard of the
+        # frame. Run along the column centreline it speared the beam end
+        # plates, their welds and the splice plates - all of which sit at the
+        # grid line. Push the whole loop clear of the steel.
+        off = CONFIG["rail_offset"]
         runs = (
-            ("S", (x_min, y_min), (x_max, y_min)),
-            ("N", (x_min, y_max), (x_max, y_max)),
-            ("W", (x_min, y_min), (x_min, y_max)),
-            ("E", (x_max, y_min), (x_max, y_max)),
+            ("S", (x_min - off, y_min - off), (x_max + off, y_min - off)),
+            ("N", (x_max + off, y_max + off), (x_min - off, y_max + off)),
+            ("W", (x_min - off, y_max + off), (x_min - off, y_min - off)),
+            ("E", (x_max + off, y_min - off), (x_max + off, y_max + off)),
         )
 
         for side, (ax, ay), (bx, by) in runs:
@@ -1172,7 +1220,10 @@ def build_accessories(collection, empty):
             step = length / (n_posts - 1)
             master = None
 
-            for p in range(n_posts):
+            # The four runs close a loop, so the post at the end of this run
+            # is the post at the start of the next. Emitting both put two
+            # posts inside each other at all four corners.
+            for p in range(n_posts - 1):
                 pname = "Rail_Edge_Post_%s_%s_%02d" % (lname, side, p + 1)
                 if master is None:
                     post = make_box(pname, (cfg["post"], cfg["post"],
