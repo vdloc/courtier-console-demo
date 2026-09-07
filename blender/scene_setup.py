@@ -58,6 +58,10 @@ SCENE = {
                    "focal": 85.0},          # a single beam-to-column joint
         "elevation": {"loc": (14.4, -120.0, 6.8), "target": (14.4, 9.0, 6.8),
                       "focal": 200.0},      # near-orthographic front elevation
+        # Straight down from far enough up that the columns barely splay -
+        # a QC view for grid spacing and symmetry, not a photograph.
+        "plan": {"loc": (14.4, 9.0, 190.0), "target": (14.4, 9.001, 0.0),
+                 "focal": 200.0},
     },
 
     # --- sky ----------------------------------------------------------------

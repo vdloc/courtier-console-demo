@@ -576,9 +576,17 @@ def build_columns(collection, empty):
     steel = CONFIG["profile_mode"] == "STEEL"
     made = []
 
+    # A column is not delivered in storey-height pieces broken at each floor.
+    # It runs past the floor and splices about 600 mm above it, clear of the
+    # beams - which is where the splice plates go. Cutting the column at the
+    # floor line while bolting the cover plates 600 mm higher left every
+    # splice plate spanning solid steel and every real joint bare.
+    lift = CONFIG["splice_lift"]
     for li, storey_h in enumerate(CONFIG["storeys"]):
         sec = column_section(li)
-        z0 = zs[li]
+        z0 = zs[li] + (lift if li > 0 else 0.0)
+        z_end = zs[li + 1] + (lift if li + 1 < len(zs) - 1 else 0.0)
+        storey_h = z_end - z0
         lname = level_name(li)
 
         if steel:

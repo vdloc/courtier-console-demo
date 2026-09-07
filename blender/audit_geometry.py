@@ -600,6 +600,24 @@ def collisions(objs, boxes, clashes):
     for name, why in route[:6]:
         add("MEDIUM", "impossible routing", name, "", why)
 
+    print("\nLOAD PATH")
+    breaks, bare, planes = load_path(objs, boxes)
+    print("    %d breaks in a column stack" % len(breaks))
+    for lower, upper, gap in breaks[:6]:
+        add("CRITICAL", "column stack broken", lower, upper,
+            "%.1f mm between the two lifts" % (gap * 1000))
+    print("    %d splice plates covering no joint" % len(bare))
+    for name, mid, js in bare[:6]:
+        add("CRITICAL", "splice covers no joint", name, "",
+            "plate centred at z=%.2f m; joints at %s"
+            % (mid, [round(j, 2) for j in js]))
+    print("    bracing planes: %s"
+          % ({k: sorted(v) for k, v in planes.items()} or "none"))
+    for axis in ("X", "Y"):
+        if not planes.get(axis):
+            add("CRITICAL", "no lateral system", "frame", "",
+                "no bracing in the %s direction at any storey" % axis)
+
     print("\nCONNECTIONS")
     orphans = orphan_parts(objs, boxes)
     print("    %d floating plates or disconnected bolts" % len(orphans))
@@ -703,26 +721,28 @@ def beam_column_fit(objs, boxes):
 
 
 def beam_datum(objs, boxes):
-    """A drop beam's top flange sits flush with the floor line, which is
-    the top of the column beneath it."""
-    cols = defaultdict(list)
-    for o in objs:
-        if family(o.name) == "COLUMN":
-            cols[o.get("grid_ref")].append(o)
+    """Every beam on a floor carries its top flange at the same height.
 
-    rows = []
+    The floor line cannot be read off the columns: a column runs past the
+    floor to its splice, so a column top is 600 mm above the level, not on
+    it. Take the datum from the beams themselves instead - group them by
+    the level they are tagged with and flag the one that disagrees with
+    its own floor.
+    """
+    floors = defaultdict(list)
     for o in objs:
         if AXIS.get(o.get("element_type") or "") is None:
             continue
-        ref = (o.get("grid_ref") or "").split("-")[0]
-        lo, hi = boxes[o.name]
-        tops = [boxes[c.name][1][2] for c in cols.get(ref, ())
-                if boxes[c.name][1][2] <= hi[2] + 0.001]
-        if not tops:
-            continue
-        off = hi[2] - max(tops)
-        if abs(off) > 0.002:
-            rows.append((o.name, off))
+        floors[o.get("level")].append(o)
+
+    rows = []
+    for level, members in floors.items():
+        tops = Counter(round(boxes[o.name][1][2], 3) for o in members)
+        (datum, _), = tops.most_common(1)
+        for o in members:
+            off = boxes[o.name][1][2] - datum
+            if abs(off) > 0.002:
+                rows.append((o.name, off))
     return rows
 
 
@@ -777,6 +797,51 @@ def pipe_routing(objs, boxes):
                 rows.append((o.name, "run sits on column grid line x=%.1f"
                              % gx))
     return rows
+
+
+def load_path(objs, boxes):
+    """Can load actually reach the ground.
+
+    Three questions clash detection cannot ask: is each column stack
+    unbroken, does each splice plate cover the joint it is named for, and
+    is there a lateral system in both directions at every storey. A frame
+    of pinned joints with no bracing is a mechanism however well its
+    members are trimmed.
+    """
+    cols = defaultdict(list)
+    for o in objs:
+        if family(o.name) == "COLUMN":
+            cols[o.get("grid_ref")].append(o)
+
+    breaks, bare = [], []
+    joints = defaultdict(list)
+    for ref, stack in cols.items():
+        stack = sorted(stack, key=lambda o: boxes[o.name][0][2])
+        for lower, upper in zip(stack, stack[1:]):
+            gap = boxes[upper.name][0][2] - boxes[lower.name][1][2]
+            joints[ref].append(boxes[lower.name][1][2])
+            if abs(gap) > 0.002:
+                breaks.append((lower.name, upper.name, gap))
+
+    for o in objs:
+        if family(o.name) != "SPLICE":
+            continue
+        lo, hi = boxes[o.name]
+        ref = o.get("grid_ref")
+        if not any(lo[2] < j < hi[2] for j in joints.get(ref, ())):
+            bare.append((o.name, (lo[2] + hi[2]) * 0.5,
+                         joints.get(ref, [])))
+
+    # Bracing planes, counted per storey and per direction.
+    planes = defaultdict(set)
+    for o in objs:
+        if family(o.name) != "BRACE":
+            continue
+        lo, hi = boxes[o.name]
+        span_x, span_y = hi[0] - lo[0], hi[1] - lo[1]
+        axis = "X" if span_x > span_y else "Y"
+        planes[axis].add(round((lo[2] + hi[2]) * 0.5, 1))
+    return breaks, bare, planes
 
 
 def orphan_parts(objs, boxes):
